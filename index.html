@@ -346,23 +346,23 @@ const DEFAULT_ETFS=[
 ];
 
 const DEFAULT_FEED_SOURCES=[
-  {id:'reuters',name:'Reuters Business',url:'https://www.reuters.com/business/',color:'#ff8c00',enabled:true},
-  {id:'cnbc',name:'CNBC',url:'https://www.cnbc.com/world/',color:'#006daa',enabled:true},
-  {id:'bloomberg',name:'Bloomberg',url:'https://www.bloomberg.com/markets',color:'#472ba8',enabled:true},
-  {id:'ft',name:'Financial Times',url:'https://www.ft.com/',color:'#fff1e5',enabled:true},
-  {id:'eco',name:'ECO (Portugal)',url:'https://eco.sapo.pt/mercados/',color:'#00a651',enabled:true},
-  {id:'jnegocios',name:'Jornal de Negócios',url:'https://www.jornaldenegocios.pt/mercados',color:'#c8102e',enabled:true},
-  {id:'investing',name:'Investing.com',url:'https://www.investing.com/news/',color:'#2962ff',enabled:true},
-  {id:'seekalpha',name:'Seeking Alpha',url:'https://seekingalpha.com/market-news',color:'#f7971e',enabled:true}
+  {id:'reuters',name:'Reuters Business',rss:'https://www.reutersagency.com/feed/?best-topics=business-finance',url:'https://www.reuters.com/business/',color:'#ff8c00',enabled:true},
+  {id:'cnbc',name:'CNBC',rss:'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114',url:'https://www.cnbc.com/world/',color:'#006daa',enabled:true},
+  {id:'investing',name:'Investing.com',rss:'https://www.investing.com/rss/news.rss',url:'https://www.investing.com/news/',color:'#2962ff',enabled:true},
+  {id:'marketwatch',name:'MarketWatch',rss:'https://feeds.marketwatch.com/marketwatch/topstories/',url:'https://www.marketwatch.com/',color:'#00ac4e',enabled:true},
+  {id:'eco',name:'ECO (Portugal)',rss:'https://eco.sapo.pt/feed/',url:'https://eco.sapo.pt/mercados/',color:'#00a651',enabled:true},
+  {id:'jnegocios',name:'Jornal de Negócios',rss:'https://www.jornaldenegocios.pt/rss',url:'https://www.jornaldenegocios.pt/',color:'#c8102e',enabled:true},
+  {id:'seekalpha',name:'Seeking Alpha',rss:'https://seekingalpha.com/market_currents.xml',url:'https://seekingalpha.com/',color:'#f7971e',enabled:true},
+  {id:'yahoo',name:'Yahoo Finance',rss:'https://finance.yahoo.com/news/rssindex',url:'https://finance.yahoo.com/',color:'#7b0099',enabled:true}
 ];
 
 const DEFAULT_YT_CHANNELS=[
-  {id:'yt1',name:'Tiago Ramos',channelUrl:'https://www.youtube.com/@TiagoRamosInvest',desc:'Investimentos PT',enabled:true},
-  {id:'yt2',name:'Gustavo Cerbasi',channelUrl:'https://www.youtube.com/@GustavoCerbasi',desc:'Finanças pessoais',enabled:true},
-  {id:'yt3',name:'Dividend Bull',channelUrl:'https://www.youtube.com/@DividendBull',desc:'Dividendos',enabled:true},
-  {id:'yt4',name:'Joseph Carlson',channelUrl:'https://www.youtube.com/@JosephCarlsonShow',desc:'Dividend investing',enabled:true},
-  {id:'yt5',name:'Andrei Jikh',channelUrl:'https://www.youtube.com/@AndreiJikh',desc:'Investing & Finance',enabled:true},
-  {id:'yt6',name:'The Plain Bagel',channelUrl:'https://www.youtube.com/@ThePlainBagel',desc:'Finance education',enabled:true}
+  {id:'yt1',name:'Daniel Menino',channelId:'UCxKVg9fRMnGFGAhBrPHQxYQ',channelUrl:'https://www.youtube.com/@odanielmenino',desc:'Investimentos PT',enabled:true},
+  {id:'yt2',name:'Tiago Ramos',channelId:'UC2iRmfRFN0In_aGKNv7DFKQ',channelUrl:'https://www.youtube.com/@TiagoRamosInvest',desc:'Investimentos PT',enabled:true},
+  {id:'yt3',name:'Dividend Bull',channelId:'UCsxJh2duQOBihNxOMpfgVOA',channelUrl:'https://www.youtube.com/@DividendBull',desc:'Dividendos',enabled:true},
+  {id:'yt4',name:'Joseph Carlson',channelId:'UCbta1dGapXS7TyFXQjELklg',channelUrl:'https://www.youtube.com/@JosephCarlsonShow',desc:'Dividend investing',enabled:true},
+  {id:'yt5',name:'Andrei Jikh',channelId:'UCGy7SkBjcIAgTiwkXEtPnYg',channelUrl:'https://www.youtube.com/@AndreiJikh',desc:'Investing & Finance',enabled:true},
+  {id:'yt6',name:'The Plain Bagel',channelId:'UCFCEuCsyWP0YkP3CZ3Mr01Q',channelUrl:'https://www.youtube.com/@ThePlainBagel',desc:'Finance education',enabled:true}
 ];
 
 const DEFAULT_USEFUL_LINKS=[
@@ -648,7 +648,7 @@ function renderContent(){
   destroyCharts();
   const el=document.getElementById('content');
   switch(activeTab){
-    case 'feed':el.innerHTML=renderFeed();break;
+    case 'feed':el.innerHTML=renderFeed();setTimeout(loadFeedData,100);break;
     case 'overview':el.innerHTML=renderOverview();break;
     case 'stocks':el.innerHTML=renderStocks();break;
     case 'etfs':el.innerHTML=renderETFs();break;
@@ -667,43 +667,127 @@ function renderContent(){
 // 📰 FEED
 // ══════════════════════════════════════════
 function renderFeed(){
+  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:8px"><h2 style="font-size:18px;font-weight:800">📰 Feed de Notícias & Conteúdo</h2><div style="display:flex;gap:8px"><button class="btn btn-sm" onclick="loadFeedData()">🔄 Atualizar Feed</button><button class="btn btn-sm" onclick="manageFeedSources()">⚙️ Gerir Fontes</button><button class="btn btn-sm" onclick="manageYTChannels()">📺 Gerir Canais</button></div></div>'+
+    '<div class="card"><div class="card-title">📺 Últimos Vídeos</div><div id="ytFeedContainer"><div style="text-align:center;padding:30px;color:var(--text-dim)"><span class="spinner"></span> A carregar vídeos...</div></div></div>'+
+    '<div class="card"><div class="card-title">Notícias Financeiras</div><div id="newsFeedContainer"><div style="text-align:center;padding:30px;color:var(--text-dim)"><span class="spinner"></span> A carregar notícias...</div></div></div>';
+}
+
+async function loadFeedData(){
+  loadYTFeed();
+  loadNewsFeed();
+}
+
+async function loadYTFeed(){
+  var container=document.getElementById('ytFeedContainer');
+  if(!container)return;
+  var channels=state.ytChannels||DEFAULT_YT_CHANNELS;
+  var activeChannels=channels.filter(function(ch){return ch.enabled});
+  var allVideos=[];
+
+  for(var ch of activeChannels){
+    try{
+      var rssUrl='https://api.rss2json.com/v1/api.json?rss_url=https://www.youtube.com/feeds/videos.xml?channel_id='+ch.channelId;
+      var r=await fetch(rssUrl);
+      if(!r.ok)continue;
+      var d=await r.json();
+      if(d.items){
+        d.items.slice(0,3).forEach(function(item){
+          var vidId='';
+          if(item.link){var m=item.link.match(/v=([^&]+)/);if(m)vidId=m[1]}
+          allVideos.push({
+            channel:ch.name,
+            title:item.title||'',
+            link:item.link||ch.channelUrl,
+            thumb:vidId?'https://img.youtube.com/vi/'+vidId+'/mqdefault.jpg':'',
+            date:item.pubDate?new Date(item.pubDate).toLocaleDateString('pt-PT'):'',
+            vidId:vidId
+          });
+        });
+      }
+    }catch(e){console.warn('YT feed error for '+ch.name,e)}
+  }
+
+  if(allVideos.length===0){
+    container.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-dim)">Não foi possível carregar vídeos. Tenta atualizar.</div>';
+    return;
+  }
+
+  container.innerHTML='<div class="yt-grid">'+allVideos.map(function(v){
+    return '<a href="'+v.link+'" target="_blank" class="yt-card">'+
+      '<div class="yt-thumb">'+(v.thumb?'<img src="'+v.thumb+'" alt="" loading="lazy">':'<div style="font-size:48px;opacity:.3">▶</div>')+'</div>'+
+      '<div class="yt-info"><div class="yt-channel">'+v.channel+'</div><div class="yt-title">'+v.title+'</div><div style="font-size:10px;color:var(--text-dim);margin-top:4px">'+v.date+'</div></div></a>';
+  }).join('')+'</div>';
+}
+
+async function loadNewsFeed(){
+  var container=document.getElementById('newsFeedContainer');
+  if(!container)return;
   var sources=state.feedSources||DEFAULT_FEED_SOURCES;
-  var ytChannels=state.ytChannels||DEFAULT_YT_CHANNELS;
-  var feedFilter=window._feedFilter||'all';
+  var activeSources=sources.filter(function(s){return s.enabled&&s.rss});
+  var allNews=[];
 
-  var sourceCards=sources.filter(function(s){return s.enabled}).map(function(s){
-    return '<a href="'+s.url+'" target="_blank" class="feed-item"><div class="feed-source" style="color:'+s.color+'">'+s.name+'</div><div class="feed-title">Abrir '+s.name+'</div><div class="feed-desc">Clica para ver as últimas notícias de '+s.name+'</div></a>';
-  }).join('');
+  for(var src of activeSources.slice(0,5)){
+    try{
+      var rssUrl='https://api.rss2json.com/v1/api.json?rss_url='+encodeURIComponent(src.rss);
+      var r=await fetch(rssUrl);
+      if(!r.ok)continue;
+      var d=await r.json();
+      if(d.items){
+        d.items.slice(0,4).forEach(function(item){
+          var desc=item.description||'';
+          desc=desc.replace(/<[^>]*>/g,'').substring(0,150);
+          allNews.push({
+            source:src.name,
+            color:src.color,
+            title:item.title||'',
+            desc:desc,
+            link:item.link||src.url,
+            date:item.pubDate?new Date(item.pubDate).toLocaleDateString('pt-PT'):'',
+            thumb:item.thumbnail||item.enclosure?.link||''
+          });
+        });
+      }
+    }catch(e){console.warn('RSS error for '+src.name,e)}
+  }
 
-  var ytCards=ytChannels.filter(function(ch){return ch.enabled}).map(function(ch){
-    return '<a href="'+ch.channelUrl+'" target="_blank" class="yt-card"><div class="yt-thumb" style="background:linear-gradient(135deg,var(--accent),var(--purple))"><div style="font-size:48px;opacity:.5">▶</div></div><div class="yt-info"><div class="yt-channel">'+ch.name+'</div><div class="yt-title">'+ch.desc+'</div></div></a>';
-  }).join('');
+  if(allNews.length===0){
+    container.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-dim)">Não foi possível carregar notícias. Tenta atualizar ou verifica as fontes.</div>';
+    return;
+  }
 
-  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 style="font-size:18px;font-weight:800">📰 Feed de Notícias & Conteúdo</h2><div style="display:flex;gap:8px"><button class="btn btn-sm" onclick="manageFeedSources()">⚙️ Gerir Fontes</button><button class="btn btn-sm" onclick="manageYTChannels()">📺 Gerir Canais</button></div></div>'+
-    '<div class="card"><div class="card-title">Notícias Financeiras</div><div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">Clica numa fonte para abrir as últimas notícias</div><div class="feed-grid">'+sourceCards+'</div></div>'+
-    '<div class="card"><div class="card-title">📺 YouTubers de Investimento</div><div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">Clica num canal para ver os vídeos mais recentes</div><div class="yt-grid">'+ytCards+'</div></div>';
+  // Sort by date desc
+  allNews.sort(function(a,b){return new Date(b.date)-new Date(a.date)});
+
+  container.innerHTML='<div class="feed-grid">'+allNews.map(function(n){
+    return '<a href="'+n.link+'" target="_blank" class="feed-item">'+
+      (n.thumb?'<div style="width:100%;height:140px;border-radius:8px;overflow:hidden;margin-bottom:10px;background:var(--bg)"><img src="'+n.thumb+'" style="width:100%;height:100%;object-fit:cover" loading="lazy" onerror="this.parentElement.style.display=\'none\'"></div>':'')+
+      '<div class="feed-source" style="color:'+n.color+'">'+n.source+'</div>'+
+      '<div class="feed-title">'+n.title+'</div>'+
+      '<div class="feed-desc">'+n.desc+'</div>'+
+      '<div class="feed-date">'+n.date+'</div></a>';
+  }).join('')+'</div>';
 }
 
 function manageFeedSources(){
   var sources=state.feedSources||DEFAULT_FEED_SOURCES;
   var html=sources.map(function(s,i){
-    return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:8px">'+
+    return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:8px;flex-wrap:wrap">'+
       '<input type="checkbox" id="fs_en_'+i+'" '+(s.enabled?'checked':'')+' style="width:18px;height:18px;cursor:pointer">'+
-      '<input id="fs_name_'+i+'" value="'+s.name+'" style="flex:1;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:12px">'+
-      '<input id="fs_url_'+i+'" value="'+s.url+'" style="flex:2;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:12px">'+
+      '<input id="fs_name_'+i+'" value="'+s.name+'" style="width:100px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:11px">'+
+      '<input id="fs_rss_'+i+'" value="'+(s.rss||'')+'" placeholder="RSS URL" style="flex:1;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:11px">'+
       '<button class="btn btn-sm btn-danger" onclick="removeFeedSource('+i+')">🗑️</button></div>';
   }).join('');
-  html+='<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div class="form-grid"><div class="form-row"><label>Nova fonte</label><input id="fs_new_name" placeholder="Nome"></div><div class="form-row"><label>URL</label><input id="fs_new_url" placeholder="https://..."></div></div></div>';
+  html+='<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Para encontrar RSS de um site, pesquisa "[nome do site] RSS feed" no Google</div><div class="form-grid"><div class="form-row"><label>Nome</label><input id="fs_new_name" placeholder="Nome"></div><div class="form-row"><label>RSS URL</label><input id="fs_new_rss" placeholder="https://.../feed.xml"></div></div></div>';
 
   showModal('Gerir Fontes de Notícias',html,function(){
     sources.forEach(function(s,i){
       s.name=document.getElementById('fs_name_'+i).value;
-      s.url=document.getElementById('fs_url_'+i).value;
+      s.rss=document.getElementById('fs_rss_'+i).value;
       s.enabled=document.getElementById('fs_en_'+i).checked;
     });
     var newName=document.getElementById('fs_new_name').value.trim();
-    var newUrl=document.getElementById('fs_new_url').value.trim();
-    if(newName&&newUrl){sources.push({id:'custom_'+Date.now(),name:newName,url:newUrl,color:'var(--accent)',enabled:true})}
+    var newRss=document.getElementById('fs_new_rss').value.trim();
+    if(newName&&newRss){sources.push({id:'custom_'+Date.now(),name:newName,rss:newRss,url:newRss,color:'var(--accent)',enabled:true})}
     state.feedSources=sources;
   });
 }
@@ -718,23 +802,23 @@ function removeFeedSource(i){
 function manageYTChannels(){
   var channels=state.ytChannels||DEFAULT_YT_CHANNELS;
   var html=channels.map(function(ch,i){
-    return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:8px">'+
+    return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:8px;flex-wrap:wrap">'+
       '<input type="checkbox" id="yt_en_'+i+'" '+(ch.enabled?'checked':'')+' style="width:18px;height:18px;cursor:pointer">'+
-      '<input id="yt_name_'+i+'" value="'+ch.name+'" style="flex:1;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:12px">'+
-      '<input id="yt_url_'+i+'" value="'+ch.channelUrl+'" style="flex:2;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:12px">'+
+      '<input id="yt_name_'+i+'" value="'+ch.name+'" style="width:100px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:11px">'+
+      '<input id="yt_cid_'+i+'" value="'+(ch.channelId||'')+'" placeholder="Channel ID" style="flex:1;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:11px">'+
       '<button class="btn btn-sm btn-danger" onclick="removeYTChannel('+i+')">🗑️</button></div>';
   }).join('');
-  html+='<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div class="form-grid"><div class="form-row"><label>Novo canal</label><input id="yt_new_name" placeholder="Nome"></div><div class="form-row"><label>URL do canal</label><input id="yt_new_url" placeholder="https://youtube.com/@..."></div></div><div class="form-row"><label>Descrição</label><input id="yt_new_desc" placeholder="Investing, Dividendos..."></div></div>';
+  html+='<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Para encontrar o Channel ID: abre o canal no YouTube, clica em "Acerca" e copia o ID do canal. Ou usa <a href="https://commentpicker.com/youtube-channel-id.php" target="_blank" style="color:var(--accent-light)">este site</a></div><div class="form-grid"><div class="form-row"><label>Nome</label><input id="yt_new_name" placeholder="Nome"></div><div class="form-row"><label>Channel ID</label><input id="yt_new_cid" placeholder="UCxxxxxxx"></div></div><div class="form-row"><label>Descrição</label><input id="yt_new_desc" placeholder="Investimentos..."></div></div>';
 
   showModal('Gerir Canais YouTube',html,function(){
     channels.forEach(function(ch,i){
       ch.name=document.getElementById('yt_name_'+i).value;
-      ch.channelUrl=document.getElementById('yt_url_'+i).value;
+      ch.channelId=document.getElementById('yt_cid_'+i).value;
       ch.enabled=document.getElementById('yt_en_'+i).checked;
     });
     var newName=document.getElementById('yt_new_name').value.trim();
-    var newUrl=document.getElementById('yt_new_url').value.trim();
-    if(newName&&newUrl){channels.push({id:'yt_'+Date.now(),name:newName,channelUrl:newUrl,desc:document.getElementById('yt_new_desc').value||'',enabled:true})}
+    var newCid=document.getElementById('yt_new_cid').value.trim();
+    if(newName&&newCid){channels.push({id:'yt_'+Date.now(),name:newName,channelId:newCid,channelUrl:'https://www.youtube.com/channel/'+newCid,desc:document.getElementById('yt_new_desc').value||'',enabled:true})}
     state.ytChannels=channels;
   });
 }
