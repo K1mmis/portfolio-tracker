@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Manager</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#0a0f1a;--card:#111827;--card2:#1a2332;--border:#1e293b;--accent:#3b82f6;--accent-light:#60a5fa;--green:#10b981;--red:#ef4444;--yellow:#f59e0b;--orange:#f97316;--purple:#8b5cf6;--pink:#ec4899;--cyan:#06b6d4;--text:#f1f5f9;--text-muted:#94a3b8;--text-dim:#64748b}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.header{background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%);border-bottom:1px solid var(--border);padding:20px 32px 0}
+.header-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:12px}
+.header h1{font-size:24px;font-weight:800;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.header-sub{color:var(--text-muted);font-size:12px;margin-top:4px}
+.account-selector{display:flex;align-items:center;gap:8px}
+.account-selector select{padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-weight:600;cursor:pointer}
+.account-selector select:focus{outline:none;border-color:var(--accent)}
+.tabs{display:flex;gap:0;overflow-x:auto}
+.tab{padding:10px 20px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--text-dim);cursor:pointer;font-size:13px;font-weight:500;white-space:nowrap;transition:all .2s}
+.tab.active{color:var(--text);font-weight:700;border-bottom-color:var(--accent)}
+.tab:hover{color:var(--text-muted)}
+.content{padding:24px 32px;max-width:1300px;margin:0 auto}
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:24px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px}
+@media(max-width:900px){.grid2,.grid3,.grid4{grid-template-columns:1fr}}
+.stat-card{background:linear-gradient(135deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:14px;padding:18px 22px;position:relative;overflow:hidden}
+.stat-card .glow{position:absolute;top:-20px;right:-20px;width:70px;height:70px;border-radius:50%;opacity:.08}
+.stat-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;font-weight:600;margin-bottom:6px}
+.stat-value{font-size:26px;font-weight:800;letter-spacing:-.5px}
+.stat-sub{font-size:11px;margin-top:4px;font-weight:600}
+.card{background:var(--card);border-radius:14px;border:1px solid var(--border);padding:22px;margin-bottom:20px}
+.card-title{font-size:14px;font-weight:700;margin-bottom:18px}
+.chart-wrap{position:relative;width:100%}
+.chart-stats{display:flex;justify-content:space-around;padding:14px 0 0;border-top:1px solid var(--border);margin-top:16px}
+.chart-stat{text-align:center}
+.chart-stat-label{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px}
+.chart-stat-value{font-size:18px;font-weight:800;margin-top:2px}
+table{width:100%;border-collapse:collapse}
+th{padding:10px 14px;font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border);background:#0f172a;position:sticky;top:0}
+td{padding:12px 14px;font-size:12px;border-bottom:1px solid var(--border)}
+tr:hover{background:rgba(255,255,255,.02)}
+.text-right{text-align:right}.text-center{text-align:center}
+.badge{padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700}
+.badge-green{background:rgba(16,185,129,.15);color:var(--green)}
+.badge-red{background:rgba(239,68,68,.15);color:var(--red)}
+.badge-purple{background:rgba(139,92,246,.15);color:var(--purple)}
+.badge-yellow{background:rgba(245,158,11,.15);color:var(--yellow)}
+.month-card{background:var(--card);border-radius:12px;padding:16px;position:relative;overflow:hidden}
+.month-card.past{opacity:.45}
+.month-badge{position:absolute;top:0;right:0;padding:3px 8px;border-radius:0 0 0 8px;font-size:9px;font-weight:700;letter-spacing:1px}
+.month-name{font-size:13px;font-weight:800;margin-bottom:3px}
+.month-total{font-size:22px;font-weight:800;margin-bottom:8px}
+.month-count{font-size:10px;color:var(--text-muted);margin-bottom:6px}
+.month-tags{display:flex;flex-wrap:wrap;gap:4px}
+.month-tag{font-size:9px;padding:2px 6px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--text-muted);font-weight:600}
+.gap-box{border-radius:10px;padding:14px}
+.gap-red{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2)}
+.gap-green{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2)}
+.gap-title{font-size:11px;font-weight:700;margin-bottom:6px}
+.etf-plan{padding:14px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.etf-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:8px}
+.plan-summary{display:flex;gap:16px;font-size:12px;color:var(--text-muted);flex-wrap:wrap}
+.plan-summary strong{color:var(--text)}
+.btn{padding:7px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:600;transition:all .15s}
+.btn:hover{border-color:var(--accent);color:var(--accent-light)}
+.btn.active{background:rgba(59,130,246,.15);border-color:var(--accent);color:var(--accent-light)}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{background:#2563eb}
+.btn-sm{padding:4px 10px;font-size:10px}
+.btn-danger{border-color:var(--red);color:var(--red)}
+.btn-danger:hover{background:rgba(239,68,68,.15)}
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:1000}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto}
+.modal h3{font-size:16px;font-weight:700;margin-bottom:16px}
+.form-row{margin-bottom:12px}
+.form-row label{display:block;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.form-row input,.form-row select,.form-row textarea{width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px}
+.form-row input:focus,.form-row select:focus{outline:none;border-color:var(--accent)}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.export-bar{display:flex;gap:8px;justify-content:space-between;align-items:center;padding:10px 32px;border-bottom:1px solid var(--border);background:#0d1117;flex-wrap:wrap}
+.export-bar-left{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.export-bar-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--green);color:#fff;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:2000;animation:fadeIn .3s ease}
+.toast.error{background:var(--red)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.update-indicator{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-dim);padding:4px 10px;border-radius:6px;background:rgba(255,255,255,.03)}
+.update-indicator.loading{color:var(--yellow)}
+.update-indicator.success{color:var(--green)}
+.update-indicator.error{color:var(--red)}
+.spinner{width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.link-ext{color:var(--accent-light);text-decoration:none;font-size:11px}
+.link-ext:hover{text-decoration:underline}
+.color-picker-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.color-dot{width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all .15s}
+.color-dot:hover,.color-dot.selected{border-color:#fff;transform:scale(1.2)}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-top">
+    <div>
+      <h1 id="headerTitle">Portfolio de Ekimilson</h1>
+      <p class="header-sub">Última atualização: <span id="lastUpdate">-</span> • Câmbio: <span id="fxRate">-</span> • <span id="totalValue">-</span></p>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div class="account-selector">
+        <select id="accountSelect" onchange="switchAccount(this.value)"></select>
+        <button class="btn btn-sm" onclick="addAccount()">+ Conta</button>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" id="btnPrevYear"></button>
+        <button class="btn btn-sm active" id="btnCurYear"></button>
+        <button class="btn btn-sm" id="btnNextYear"></button>
+      </div>
+    </div>
+  </div>
+  <div class="tabs" id="tabs"></div>
+</div>
+<div class="export-bar">
+  <div class="export-bar-left">
+    <button class="btn btn-sm" onclick="refreshPrices()" id="btnRefresh">🔄 Atualizar Preços</button>
+    <span class="update-indicator" id="updateStatus">Última: <span id="lastPriceUpdate">-</span></span>
+  </div>
+  <div class="export-bar-right">
+    <button class="btn btn-sm" onclick="exportData()">📥 Exportar JSON</button>
+    <button class="btn btn-sm" onclick="document.getElementById('importFile').click()">📤 Importar</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+    <button class="btn btn-sm" onclick="saveData();showToast('Dados guardados!')">💾 Guardar</button>
+  </div>
+</div>
+<div class="content" id="content"></div>
+<div id="toastContainer"></div>
+<script>
+// ══════════════════════════════════════════
+// CONSTANTS
+// ══════════════════════════════════════════
+const MONTHS=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+const MONTHS_FULL=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const PLAN_COLOR_OPTIONS=["#10b981","#3b82f6","#f97316","#8b5cf6","#f59e0b","#ec4899","#06b6d4","#ef4444","#84cc16","#14b8a6","#f43f5e","#a855f7"];
+const SECTOR_COLORS={"Technology":"#3b82f6","Healthcare":"#10b981","Financial":"#f59e0b","Energy":"#ef4444","Consumer":"#8b5cf6","Utilities":"#06b6d4","REIT":"#ec4899","Tobacco":"#f97316","Industrial":"#84cc16","Telecom":"#14b8a6","Other":"#64748b"};
+const TABS=[
+  {id:"overview",label:"📊 Resumo"},
+  {id:"stocks",label:"📈 Ações"},
+  {id:"etfs",label:"🏦 ETFs"},
+  {id:"dividends",label:"💰 Dividendos"},
+  {id:"calendar",label:"📅 Calendário"},
+  {id:"watchlist",label:"👀 Watchlist"},
+  {id:"history",label:"📋 Histórico"}
+];
+
+// ══════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════
+let allAccounts={};
+let currentAccountId="";
+let state={};
+let selectedYear=new Date().getFullYear();
+let activeTab="overview";
+let charts={};
+let fxRate=0.92; // EUR/USD default
+
+// ══════════════════════════════════════════
+// ACCOUNT MANAGEMENT
+// ══════════════════════════════════════════
+function loadAllAccounts(){
+  const s=localStorage.getItem('portfolio_accounts_v3');
+  if(s){allAccounts=JSON.parse(s)}
+  else{
+    const defaultId='ekimilson';
+    allAccounts={
+      _current:defaultId,
+      [defaultId]:{
+        name:"Ekimilson",
+        broker:"XTB",
+        stocks:JSON.parse(JSON.stringify(DEFAULT_STOCKS)),
+        etfs:JSON.parse(JSON.stringify(DEFAULT_ETFS)),
+        plans:JSON.parse(JSON.stringify(DEFAULT_PLANS)),
+        watchlistStocks:JSON.parse(JSON.stringify(DEFAULT_WATCHLIST_STOCKS)),
+        watchlistETFs:[],
+        dividendsReceived:[],
+        decisions:[],
+        lastUpdate:new Date().toISOString(),
+        lastPriceUpdate:null
+      }
+    };
+  }
+  currentAccountId=allAccounts._current||Object.keys(allAccounts).filter(k=>k!=='_current')[0];
+  state=allAccounts[currentAccountId];
+  renderAccountSelector();
+}
+
+function saveAllAccounts(){
+  allAccounts[currentAccountId]=state;
+  allAccounts._current=currentAccountId;
+  localStorage.setItem('portfolio_accounts_v3',JSON.stringify(allAccounts));
+}
+
+function saveData(){
+  state.lastUpdate=new Date().toISOString();
+  saveAllAccounts();
+}
+
+function switchAccount(id){
+  saveAllAccounts();
+  currentAccountId=id;
+  state=allAccounts[id];
+  allAccounts._current=id;
+  saveAllAccounts();
+  render();
+}
+
+function addAccount(){
+  showModal('Nova Conta',`
+    <div class="form-row"><label>Nome</label><input id="f_accName" placeholder="Ex: Mãe, Trading212..."></div>
+    <div class="form-row"><label>Corretora</label><input id="f_accBroker" placeholder="XTB, Trading 212, etc."></div>
+  `,()=>{
+    const name=document.getElementById('f_accName').value.trim();
+    const broker=document.getElementById('f_accBroker').value.trim();
+    if(!name)return;
+    const id=name.toLowerCase().replace(/\s+/g,'_')+'_'+Date.now();
+    allAccounts[id]={name,broker,stocks:[],etfs:[],plans:[],watchlistStocks:[],watchlistETFs:[],dividendsReceived:[],decisions:[],lastUpdate:new Date().toISOString(),lastPriceUpdate:null};
+    switchAccount(id);
+    showToast('Conta "'+name+'" criada!');
+  });
+}
+
+function renderAccountSelector(){
+  const sel=document.getElementById('accountSelect');
+  sel.innerHTML='';
+  Object.keys(allAccounts).filter(k=>k!=='_current').forEach(id=>{
+    const a=allAccounts[id];
+    const opt=document.createElement('option');
+    opt.value=id;
+    opt.textContent=a.name+(a.broker?' ('+a.broker+')':'');
+    if(id===currentAccountId)opt.selected=true;
+    sel.appendChild(opt);
+  });
+}
+
+// ══════════════════════════════════════════
+// DEFAULT DATA
+// ══════════════════════════════════════════
+const DEFAULT_STOCKS=[
+  {ticker:"MO",name:"Altria Group",sector:"Tobacco",volume:2.0212,buyPrice:66.76,currentPrice:66.47,currency:"USD",divYield:6.38,divPerShare:1.06,freq:"Trimestral",months:[1,4,7,10]},
+  {ticker:"ENEL",name:"Enel SpA",sector:"Utilities",volume:3.574,buyPrice:9.79,currentPrice:9.17,currency:"EUR",divYield:5.14,divPerShare:0.235,freq:"Semestral",months:[1,7]},
+  {ticker:"MDLZ",name:"Mondelez",sector:"Consumer",volume:2.2121,buyPrice:59.71,currentPrice:58.31,currency:"USD",divYield:3.55,divPerShare:0.50,freq:"Trimestral",months:[1,4,7,10]},
+  {ticker:"PLD",name:"Prologis",sector:"REIT",volume:0.2179,buyPrice:122.21,currentPrice:128.97,currency:"USD",divYield:3.18,divPerShare:1.07,freq:"Trimestral",months:[3,6,9,12]},
+  {ticker:"O",name:"Realty Income",sector:"REIT",volume:1.388,buyPrice:64.73,currentPrice:60.73,currency:"USD",divYield:5.34,divPerShare:0.2705,freq:"Mensal",months:[1,2,3,4,5,6,7,8,9,10,11,12]},
+  {ticker:"UVV",name:"Universal Corp",sector:"Tobacco",volume:2,buyPrice:52.71,currentPrice:52.74,currency:"USD",divYield:6.73,divPerShare:0.80,freq:"Trimestral",months:[2,5,8,11]},
+  {ticker:"VICI",name:"VICI Properties",sector:"REIT",volume:2.7585,buyPrice:26.59,currentPrice:26.59,currency:"USD",divYield:6.76,divPerShare:0.45,freq:"Trimestral",months:[1,4,7,10]}
+];
+
+const DEFAULT_PLANS=[
+  {id:"workolic",name:"Workolic",color:"#10b981"},
+  {id:"dividendos",name:"Dividendos",color:"#3b82f6"},
+  {id:"semicondutores",name:"Semicondutores",color:"#f97316"},
+  {id:"ishares",name:"iShares",color:"#8b5cf6"},
+  {id:"plano_inicial",name:"Plano Inicial",color:"#f59e0b"}
+];
+
+const DEFAULT_ETFS=[
+  {planId:"workolic",name:"iShares Core EURO STOXX 50 UCITS",ticker:"SX5S",type:"ACC",invested:38.65,current:38.20,isin:"IE00B53L3W79"},
+  {planId:"workolic",name:"L&G Battery Value-Chain UCITS",ticker:"BATT",type:"ACC",invested:36.28,current:42.13,isin:"IE00BF0M2Z96"},
+  {planId:"workolic",name:"Invesco CoinShares Global Blockchain UCITS",ticker:"BCHN",type:"ACC",invested:44.20,current:39.65,isin:"IE00BGBN6P67"},
+  {planId:"dividendos",name:"SPDR S&P Euro Dividend Aristocrats UCITS",ticker:"EUDV",type:"DIST",invested:29.73,current:29.32,isin:"IE00B5M1WJ87"},
+  {planId:"dividendos",name:"SPDR S&P Gbl Div Aristocrats UCITS",ticker:"GLDV",type:"DIST",invested:29.80,current:29.42,isin:"IE00B9CQXS71"},
+  {planId:"dividendos",name:"SPDR S&P Pan Asia Dividend Aristocrats",ticker:"ASDV",type:"DIST",invested:29.81,current:29.01,isin:"IE00B9KNR336"},
+  {planId:"dividendos",name:"Vanguard FTSE All-World High Div Yield UCITS",ticker:"VHYL",type:"DIST",invested:29.74,current:29.80,isin:"IE00B8GKDB10"},
+  {planId:"semicondutores",name:"iShares Automation & Robotics UCITS",ticker:"RBOT",type:"ACC",invested:52.59,current:49.12,isin:"IE00BYZK4552"},
+  {planId:"semicondutores",name:"VanEck Semiconductor UCITS",ticker:"SMH",type:"ACC",invested:67.19,current:70.61,isin:"IE00BMC38736"},
+  {planId:"semicondutores",name:"Lyxor MSCI Semiconductors ESG Filtered UCITS",ticker:"CHIP",type:"ACC",invested:78.78,current:80.34,isin:"LU1900066033"},
+  {planId:"ishares",name:"iShares NASDAQ 100 UCITS",ticker:"CNDX",type:"ACC",invested:20.52,current:19.37,isin:"IE00B53SZB19"},
+  {planId:"ishares",name:"iShares Core S&P 500 UCITS",ticker:"CSPX",type:"ACC",invested:17.74,current:17.09,isin:"IE00B5BMR087"},
+  {planId:"ishares",name:"iShares Core MSCI World UCITS",ticker:"IWDA",type:"ACC",invested:20.78,current:20.19,isin:"IE00B4L5Y983"},
+  {planId:"plano_inicial",name:"Xtrackers AI and Big Data UCITS",ticker:"XAIX",type:"ACC",invested:35.56,current:32.84,isin:"IE00BGV5VN51"},
+  {planId:"plano_inicial",name:"VanEck AEX UCITS",ticker:"TAXE",type:"DIST",invested:35.60,current:35.24,isin:"NL0009272749"},
+  {planId:"plano_inicial",name:"iShares $ Treasury Bond 3-7yr UCITS",ticker:"IUSM",type:"ACC",invested:36.62,current:36.50,isin:"IE00B3VWN518"}
+];
+
+const DEFAULT_WATCHLIST_STOCKS=[
+  {ticker:"ABBV",name:"AbbVie",sector:"Healthcare",divYield:3.85,freq:"Trimestral",months:"Fev/Mai/Ago/Nov",interest:"SIM",notes:"Cobre meses fracos"},
+  {ticker:"MAIN",name:"Main Street Capital",sector:"Financial",divYield:7.01,freq:"Mensal",months:"Todos",interest:"SIM",notes:"BDC mensal"},
+  {ticker:"PM",name:"Philip Morris",sector:"Tobacco",divYield:5.97,freq:"Trimestral",months:"Jan/Abr/Jul/Out",interest:"SIM",notes:"Tabaco global"},
+  {ticker:"KO",name:"Coca-Cola",sector:"Consumer",divYield:3.12,freq:"Trimestral",months:"Abr/Jul/Out/Dez",interest:"TALVEZ",notes:"Dividend King"},
+  {ticker:"T",name:"AT&T",sector:"Telecom",divYield:7.12,freq:"Trimestral",months:"Fev/Mai/Ago/Nov",interest:"ANALISAR",notes:"Alto yield, risco"},
+  {ticker:"JNJ",name:"Johnson & Johnson",sector:"Healthcare",divYield:2.93,freq:"Trimestral",months:"Mar/Jun/Set/Dez",interest:"TALVEZ",notes:"Dividend King"},
+  {ticker:"PEP",name:"PepsiCo",sector:"Consumer",divYield:2.63,freq:"Trimestral",months:"Jan/Mar/Jun/Set",interest:"TALVEZ",notes:"Dividend King"},
+  {ticker:"CVX",name:"Chevron",sector:"Energy",divYield:3.49,freq:"Trimestral",months:"Mar/Jun/Set/Dez",interest:"TALVEZ",notes:"Energia"}
+];
+
+
+// ══════════════════════════════════════════
+// FX & PRICE API
+// ══════════════════════════════════════════
+async function fetchFxRate(){
+  try{
+    const r=await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+    const d=await r.json();
+    fxRate=d.rates.EUR||0.92;
+    document.getElementById('fxRate').textContent='1 USD = '+fxRate.toFixed(4)+' EUR';
+    return fxRate;
+  }catch(e){
+    console.warn('FX fetch failed, using default',e);
+    document.getElementById('fxRate').textContent='1 USD = '+fxRate.toFixed(4)+' EUR (cache)';
+    return fxRate;
+  }
+}
+
+async function fetchStockPrice(ticker){
+  // Try Yahoo Finance via CORS proxy
+  const proxies=[
+    `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=1d&interval=1d`,
+  ];
+  for(const url of proxies){
+    try{
+      const r=await fetch(url);
+      if(!r.ok)continue;
+      const d=await r.json();
+      const meta=d.chart?.result?.[0]?.meta;
+      if(meta&&meta.regularMarketPrice){
+        return{price:meta.regularMarketPrice,currency:meta.currency||'USD'};
+      }
+    }catch(e){continue}
+  }
+  return null;
+}
+
+async function refreshPrices(){
+  const btn=document.getElementById('btnRefresh');
+  const status=document.getElementById('updateStatus');
+  btn.disabled=true;
+  btn.textContent='⏳ A atualizar...';
+  status.className='update-indicator loading';
+  status.innerHTML='<span class="spinner"></span> A buscar preços...';
+
+  await fetchFxRate();
+
+  let updated=0,failed=0;
+  const allTickers=[...state.stocks.map(s=>({ticker:s.ticker,type:'stock'}))];
+
+  for(const item of allTickers){
+    try{
+      const result=await fetchStockPrice(item.ticker);
+      if(result){
+        const stock=state.stocks.find(s=>s.ticker===item.ticker);
+        if(stock){stock.currentPrice=result.price;updated++}
+      }else{failed++}
+    }catch(e){failed++}
+    // Small delay to avoid rate limiting
+    await new Promise(r=>setTimeout(r,300));
+  }
+
+  state.lastPriceUpdate=new Date().toISOString();
+  saveData();
+  render();
+
+  btn.disabled=false;
+  btn.textContent='🔄 Atualizar Preços';
+  if(failed===0){
+    status.className='update-indicator success';
+    status.textContent='✅ '+updated+' preços atualizados';
+    showToast(updated+' preços atualizados!');
+  }else{
+    status.className='update-indicator error';
+    status.textContent='⚠️ '+updated+' ok, '+failed+' falharam';
+    showToast(updated+' ok, '+failed+' falharam — atualiza manualmente','error');
+  }
+}
+
+// Auto-refresh check (every 24h)
+function checkAutoRefresh(){
+  if(!state.lastPriceUpdate)return;
+  const last=new Date(state.lastPriceUpdate);
+  const now=new Date();
+  const hours=(now-last)/(1000*60*60);
+  if(hours>=24){
+    console.log('Auto-refreshing prices (>24h since last update)');
+    refreshPrices();
+  }
+}
+
+// ══════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════
+function toEUR(value,currency){
+  if(currency==='EUR')return value;
+  return value*fxRate;
+}
+
+function fmt(v){return new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'}).format(v)}
+
+function calcDividendCalendar(){
+  return MONTHS.map((name,idx)=>{
+    const monthNum=idx+1;let total=0;const details=[];
+    state.stocks.forEach(s=>{
+      if(s.months&&s.months.includes(monthNum)){
+        const amt=toEUR(s.volume*s.divPerShare,s.currency);
+        total+=amt;
+        details.push({ticker:s.ticker,name:s.name,amount:amt});
+      }
+    });
+    return{month:name,monthFull:MONTHS_FULL[idx],monthNum,total,details,count:details.length};
+  });
+}
+
+function calcTotals(){
+  const si=state.stocks.reduce((a,s)=>a+toEUR(s.volume*s.buyPrice,s.currency),0);
+  const sc=state.stocks.reduce((a,s)=>a+toEUR(s.volume*s.currentPrice,s.currency),0);
+  const ei=state.etfs.reduce((a,e)=>a+e.invested,0);
+  const ec=state.etfs.reduce((a,e)=>a+e.current,0);
+  return{stocksInv:si,stocksCur:sc,etfsInv:ei,etfsCur:ec,totalInv:si+ei,totalCur:sc+ec};
+}
+
+function getPlan(planId){return(state.plans||[]).find(p=>p.id===planId)||{name:planId,color:'#64748b'}}
+
+function showToast(msg,type='success'){
+  const t=document.createElement('div');
+  t.className='toast'+(type==='error'?' error':'');
+  t.textContent=msg;
+  document.getElementById('toastContainer').appendChild(t);
+  setTimeout(()=>t.remove(),3000);
+}
+
+function exportData(){
+  const blob=new Blob([JSON.stringify(allAccounts,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`portfolio_backup_${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  showToast('Backup exportado!');
+}
+
+function importData(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      const imported=JSON.parse(ev.target.result);
+      // Check if it's multi-account or single
+      if(imported._current){allAccounts=imported}
+      else{allAccounts[currentAccountId]=imported;allAccounts[currentAccountId].lastUpdate=new Date().toISOString()}
+      localStorage.setItem('portfolio_accounts_v3',JSON.stringify(allAccounts));
+      location.reload();
+    }catch(err){alert('Erro: '+err.message)}
+  };
+  reader.readAsText(file);
+  e.target.value='';
+}
+
+function showModal(title,fieldsHTML,onSave){
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};
+  overlay.innerHTML=`<div class="modal"><h3>${title}</h3><div>${fieldsHTML}</div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px"><button class="btn" onclick="this.closest('.modal-overlay').remove()">Cancelar</button><button class="btn btn-primary" id="modalSaveBtn">Guardar</button></div></div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#modalSaveBtn').onclick=()=>{onSave();overlay.remove();saveData();render()};
+}
+
+
+// ══════════════════════════════════════════
+// RENDER ENGINE
+// ══════════════════════════════════════════
+function render(){
+  document.getElementById('headerTitle').textContent='Portfolio de '+state.name;
+  document.title='Portfolio de '+state.name;
+  const d=state.lastUpdate?new Date(state.lastUpdate):new Date();
+  document.getElementById('lastUpdate').textContent=d.toLocaleDateString('pt-PT');
+  document.getElementById('fxRate').textContent='1 USD = '+fxRate.toFixed(4)+' EUR';
+  const t=calcTotals();
+  document.getElementById('totalValue').textContent=fmt(t.totalCur);
+  if(state.lastPriceUpdate){
+    document.getElementById('lastPriceUpdate').textContent=new Date(state.lastPriceUpdate).toLocaleString('pt-PT');
+  }
+  renderYearButtons();
+  renderTabs();
+  renderContent();
+  renderAccountSelector();
+}
+
+function renderYearButtons(){
+  const cy=new Date().getFullYear();
+  const years=[cy,cy+1,cy+2];
+  document.getElementById('btnPrevYear').textContent=years[0];
+  document.getElementById('btnPrevYear').className='btn btn-sm'+(selectedYear===years[0]?' active':'');
+  document.getElementById('btnPrevYear').onclick=()=>{selectedYear=years[0];render()};
+  document.getElementById('btnCurYear').textContent=years[1];
+  document.getElementById('btnCurYear').className='btn btn-sm'+(selectedYear===years[1]?' active':'');
+  document.getElementById('btnCurYear').onclick=()=>{selectedYear=years[1];render()};
+  document.getElementById('btnNextYear').textContent=years[2];
+  document.getElementById('btnNextYear').className='btn btn-sm'+(selectedYear===years[2]?' active':'');
+  document.getElementById('btnNextYear').onclick=()=>{selectedYear=years[2];render()};
+}
+
+function renderTabs(){
+  document.getElementById('tabs').innerHTML=TABS.map(t=>`<button class="tab ${activeTab===t.id?'active':''}" onclick="switchTab('${t.id}')">${t.label}</button>`).join('');
+}
+
+function switchTab(id){activeTab=id;renderTabs();renderContent()}
+
+function destroyCharts(){Object.values(charts).forEach(c=>{try{c.destroy()}catch(e){}});charts={}}
+
+function renderContent(){
+  destroyCharts();
+  const el=document.getElementById('content');
+  switch(activeTab){
+    case 'overview':el.innerHTML=renderOverview();break;
+    case 'stocks':el.innerHTML=renderStocks();break;
+    case 'etfs':el.innerHTML=renderETFs();break;
+    case 'dividends':el.innerHTML=renderDividends();break;
+    case 'calendar':el.innerHTML=renderCalendar();break;
+    case 'watchlist':el.innerHTML=renderWatchlist();break;
+    case 'history':el.innerHTML=renderHistory();break;
+  }
+  setTimeout(initCharts,50);
+}
+
+// ══════════════════════════════════════════
+// OVERVIEW
+// ══════════════════════════════════════════
+function renderOverview(){
+  const t=calcTotals();
+  const pl=t.totalCur-t.totalInv;
+  const plPct=t.totalInv>0?(pl/t.totalInv*100):0;
+  const cal=calcDividendCalendar();
+  const totalDiv=cal.reduce((a,b)=>a+b.total,0);
+  const avgDiv=totalDiv/12;
+  const maxDiv=Math.max(...cal.map(d=>d.total));
+  const minDiv=Math.min(...cal.map(d=>d.total));
+  const variance=maxDiv>0?((maxDiv-minDiv)/maxDiv*100):0;
+
+  return `
+    <div class="grid4">
+      <div class="stat-card"><div class="glow" style="background:var(--accent)"></div><div class="stat-label">Valor Total</div><div class="stat-value">${fmt(t.totalCur)}</div><div class="stat-sub" style="color:var(--accent)">Investido: ${fmt(t.totalInv)}</div></div>
+      <div class="stat-card"><div class="glow" style="background:${pl>=0?'var(--green)':'var(--red)'}"></div><div class="stat-label">Lucro / Perda</div><div class="stat-value" style="color:${pl>=0?'var(--green)':'var(--red)'}">${fmt(pl)}</div><div class="stat-sub" style="color:${pl>=0?'var(--green)':'var(--red)'}">${plPct>=0?'+':''}${plPct.toFixed(2)}%</div></div>
+      <div class="stat-card"><div class="glow" style="background:var(--yellow)"></div><div class="stat-label">Dividendos/Ano (est.)</div><div class="stat-value">${fmt(totalDiv)}</div><div class="stat-sub" style="color:var(--yellow)">Média: ${fmt(avgDiv)}/mês</div></div>
+      <div class="stat-card"><div class="glow" style="background:var(--purple)"></div><div class="stat-label">Variância Mensal</div><div class="stat-value">${variance.toFixed(1)}%</div><div class="stat-sub" style="color:var(--purple)">Min: ${fmt(minDiv)} | Max: ${fmt(maxDiv)}</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Dividendos Esperados por Mês — ${selectedYear}</div>
+      <div class="chart-wrap"><canvas id="chartDivMonth" height="300"></canvas></div>
+      <div class="chart-stats">
+        <div class="chart-stat"><div class="chart-stat-label">Média</div><div class="chart-stat-value" style="color:var(--accent)">${fmt(avgDiv)}</div></div>
+        <div class="chart-stat"><div class="chart-stat-label">Máximo</div><div class="chart-stat-value" style="color:var(--green)">${fmt(maxDiv)}</div></div>
+        <div class="chart-stat"><div class="chart-stat-label">Mínimo</div><div class="chart-stat-value" style="color:var(--red)">${fmt(minDiv)}</div></div>
+        <div class="chart-stat"><div class="chart-stat-label">Variância</div><div class="chart-stat-value" style="color:${variance>50?'var(--red)':'var(--green)'}">${variance.toFixed(1)}%</div></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card"><div class="card-title">Alocação — Ações por Setor</div><div class="chart-wrap"><canvas id="chartStockAlloc" height="260"></canvas></div></div>
+      <div class="card"><div class="card-title">Alocação — ETFs por Plano</div><div class="chart-wrap"><canvas id="chartETFAlloc" height="260"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Performance das Ações vs Dividend Yield</div>
+      <div class="chart-wrap"><canvas id="chartPerformance" height="220"></canvas></div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════
+// STOCKS TAB
+// ══════════════════════════════════════════
+function renderStocks(){
+  const t=calcTotals();
+  const totalDiv=state.stocks.reduce((a,s)=>a+toEUR(s.volume*s.divPerShare*s.months.length,s.currency),0);
+  const plTotal=t.stocksCur-t.stocksInv;
+  let rows=state.stocks.map((s,i)=>{
+    const plE=toEUR(s.volume*(s.currentPrice-s.buyPrice),s.currency);
+    const plPct=s.buyPrice>0?((s.currentPrice-s.buyPrice)/s.buyPrice*100):0;
+    const annDiv=toEUR(s.volume*s.divPerShare*s.months.length,s.currency);
+    const valE=toEUR(s.volume*s.currentPrice,s.currency);
+    return `<tr>
+      <td style="font-weight:800;color:var(--accent)">${s.ticker}</td>
+      <td>${s.name}</td>
+      <td><span class="badge badge-purple">${s.sector||'-'}</span></td>
+      <td class="text-right">${s.volume.toFixed(4)}</td>
+      <td class="text-right">${fmt(toEUR(s.buyPrice,s.currency))}</td>
+      <td class="text-right" style="font-weight:600">${fmt(toEUR(s.currentPrice,s.currency))}</td>
+      <td class="text-right">${fmt(valE)}</td>
+      <td class="text-right" style="font-weight:700;color:${plE>=0?'var(--green)':'var(--red)'}">${plE>=0?'+':''}${fmt(plE)}</td>
+      <td class="text-right"><span class="badge ${plPct>=0?'badge-green':'badge-red'}">${plPct>=0?'+':''}${plPct.toFixed(2)}%</span></td>
+      <td class="text-right" style="font-weight:700;color:${s.divYield>=5?'var(--green)':'var(--yellow)'}">${s.divYield}%</td>
+      <td class="text-right" style="font-weight:700;color:var(--green)">${fmt(annDiv)}</td>
+      <td class="text-center"><button class="btn btn-sm" onclick="editStock(${i})">✏️</button> <button class="btn btn-sm btn-danger" onclick="deleteStock(${i})">🗑️</button></td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="toolbar">
+      <button class="btn btn-primary" onclick="addStock()">+ Adicionar Ação</button>
+      <button class="btn" onclick="updateAllPrices()">🔄 Atualizar Preços Manual</button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>Ticker</th><th>Empresa</th><th>Setor</th><th class="text-right">Vol.</th><th class="text-right">Compra (€)</th><th class="text-right">Atual (€)</th><th class="text-right">Valor (€)</th><th class="text-right">P&L (€)</th><th class="text-right">P&L %</th><th class="text-right">Yield</th><th class="text-right">Div/Ano (€)</th><th class="text-center">Ações</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr style="background:rgba(59,130,246,.08)">
+          <td colspan="6" style="font-weight:800;font-size:13px">TOTAL</td>
+          <td class="text-right" style="font-weight:800">${fmt(t.stocksCur)}</td>
+          <td class="text-right" style="font-weight:800;color:${plTotal>=0?'var(--green)':'var(--red)'}">${plTotal>=0?'+':''}${fmt(plTotal)}</td>
+          <td class="text-right" style="font-weight:800">${t.stocksInv>0?((plTotal/t.stocksInv)*100).toFixed(2):'0'}%</td>
+          <td></td>
+          <td class="text-right" style="font-weight:800;color:var(--green)">${fmt(totalDiv)}</td>
+          <td></td>
+        </tr></tfoot>
+      </table></div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════
+// ETFs TAB
+// ══════════════════════════════════════════
+function renderETFs(){
+  const plans=state.plans||[];
+  let html=`<div class="toolbar">
+    <button class="btn btn-primary" onclick="addETF()">+ Adicionar ETF</button>
+    <button class="btn" onclick="managePlans()">⚙️ Gerir Planos</button>
+  </div>`;
+
+  plans.forEach(plan=>{
+    const planETFs=state.etfs.filter(e=>e.planId===plan.id);
+    if(!planETFs.length)return;
+    const inv=planETFs.reduce((a,e)=>a+e.invested,0);
+    const cur=planETFs.reduce((a,e)=>a+e.current,0);
+    const pl=cur-inv;
+
+    let rows=planETFs.map((e,gi)=>{
+      const i=state.etfs.indexOf(e);
+      const epl=e.current-e.invested;
+      const eplPct=e.invested>0?(epl/e.invested*100):0;
+      const justETFLink=e.isin?`https://www.justetf.com/en/etf-profile.html?isin=${e.isin}`:'';
+      return `<tr>
+        <td style="font-weight:700;color:var(--accent)">${e.ticker||'-'}</td>
+        <td>${e.name}${justETFLink?` <a href="${justETFLink}" target="_blank" class="link-ext">↗ JustETF</a>`:''}</td>
+        <td class="text-center"><span class="badge ${e.type==='DIST'?'badge-green':'badge-purple'}">${e.type}</span></td>
+        <td class="text-right">${fmt(e.invested)}</td>
+        <td class="text-right" style="font-weight:600">${fmt(e.current)}</td>
+        <td class="text-right" style="font-weight:700;color:${epl>=0?'var(--green)':'var(--red)'}">${epl>=0?'+':''}${fmt(epl)} (${eplPct>=0?'+':''}${eplPct.toFixed(2)}%)</td>
+        <td class="text-center"><button class="btn btn-sm" onclick="editETF(${i})">✏️</button> <button class="btn btn-sm btn-danger" onclick="deleteETF(${i})">🗑️</button></td>
+      </tr>`;
+    }).join('');
+
+    html+=`<div class="card" style="padding:0;overflow:hidden;margin-bottom:16px">
+      <div class="etf-plan">
+        <div style="display:flex;align-items:center;gap:8px"><span class="etf-dot" style="background:${plan.color}"></span><strong>${plan.name}</strong></div>
+        <div class="plan-summary"><span>Investido: <strong>${fmt(inv)}</strong></span><span>Atual: <strong>${fmt(cur)}</strong></span><span style="font-weight:700;color:${pl>=0?'var(--green)':'var(--red)'}">${pl>=0?'+':''}${fmt(pl)}</span></div>
+      </div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Ticker</th><th>Nome</th><th class="text-center">Tipo</th><th class="text-right">Investido</th><th class="text-right">Atual</th><th class="text-right">P&L</th><th class="text-center">Ações</th></tr></thead><tbody>${rows}</tbody></table></div>
+    </div>`;
+  });
+
+  return html;
+}
+
+
+// ══════════════════════════════════════════
+// DIVIDENDS TAB
+// ══════════════════════════════════════════
+function renderDividends(){
+  const cal=calcDividendCalendar();
+  const totalDiv=cal.reduce((a,b)=>a+b.total,0);
+  const avgDiv=totalDiv/12;
+  const maxDiv=Math.max(...cal.map(d=>d.total));
+  const minDiv=Math.min(...cal.map(d=>d.total));
+  const variance=maxDiv>0?((maxDiv-minDiv)/maxDiv*100):0;
+
+  let detailHTML='';
+  cal.forEach(m=>{
+    if(m.details.length>0){
+      detailHTML+=`<div style="margin-bottom:6px"><strong style="color:var(--accent-light)">${m.monthFull}:</strong> `;
+      detailHTML+=m.details.map(d=>`<span class="badge badge-green">${d.ticker} ${fmt(d.amount)}</span>`).join(' ');
+      detailHTML+=`</div>`;
+    }
+  });
+
+  return `
+    <div class="grid3">
+      <div class="stat-card"><div class="stat-label">Total Anual Estimado</div><div class="stat-value" style="color:var(--green)">${fmt(totalDiv)}</div></div>
+      <div class="stat-card"><div class="stat-label">Média Mensal</div><div class="stat-value" style="color:var(--accent)">${fmt(avgDiv)}</div></div>
+      <div class="stat-card"><div class="stat-label">Variância</div><div class="stat-value" style="color:${variance>50?'var(--red)':'var(--green)'}">${variance.toFixed(1)}%</div><div class="stat-sub" style="color:${variance>50?'var(--red)':'var(--green)'}">${variance>50?'Desequilibrado':'Equilibrado'}</div></div>
+    </div>
+    <div class="card"><div class="card-title">Dividendos Esperados — ${selectedYear}</div><div class="chart-wrap"><canvas id="chartDivBig" height="320"></canvas></div></div>
+    <div class="card"><div class="card-title">Dividend Yield por Ação</div><div class="chart-wrap"><canvas id="chartYield" height="220"></canvas></div></div>
+    <div class="card"><div class="card-title">Detalhe por Mês</div>${detailHTML}</div>`;
+}
+
+// ══════════════════════════════════════════
+// CALENDAR
+// ══════════════════════════════════════════
+function renderCalendar(){
+  const cal=calcDividendCalendar();
+  const now=new Date();const curMonth=now.getMonth();const curYear=now.getFullYear();
+  // Calculate received dividends per month
+  const received={};
+  (state.dividendsReceived||[]).forEach(d=>{
+    if(!d.date)return;
+    const dt=new Date(d.date);
+    if(dt.getFullYear()===selectedYear){
+      const m=dt.getMonth();
+      if(!received[m])received[m]=0;
+      received[m]+=parseFloat(d.netEUR||0)||0;
+    }
+  });
+
+  let cardsHTML=cal.map((m,idx)=>{
+    const isPast=selectedYear===curYear&&idx<curMonth;
+    let strength,sColor;
+    if(m.count>=5){strength='EXCELENTE';sColor='var(--green)'}
+    else if(m.count>=4){strength='FORTE';sColor='#22c55e'}
+    else if(m.count>=3){strength='BOM';sColor='var(--yellow)'}
+    else if(m.count>=2){strength='FRACO';sColor='var(--orange)'}
+    else{strength='CRÍTICO';sColor='var(--red)'}
+
+    const tags=m.details.map(d=>`<span class="month-tag">${d.ticker} ${fmt(d.amount)}</span>`).join('');
+    const rec=received[idx]||0;
+    const investedThisMonth=(state.decisions||[]).filter(d=>d.month&&d.month.includes(m.month)&&d.month.includes(String(selectedYear))).reduce((a,d)=>a+(d.amount||0),0);
+
+    return `<div class="month-card ${isPast?'past':''}" style="border:1px solid ${isPast?'var(--border)':sColor}33">
+      <div class="month-badge" style="background:${sColor}22;color:${sColor}">${strength}</div>
+      <div class="month-name">${m.monthFull}</div>
+      <div class="month-total" style="color:${sColor}">${fmt(m.total)}</div>
+      <div class="month-count">${m.count} ações pagam</div>
+      ${rec>0?`<div style="font-size:10px;color:var(--green);margin:4px 0">✅ Recebido: ${fmt(rec)}</div>`:''}
+      ${investedThisMonth>0?`<div style="font-size:10px;color:var(--accent);margin:2px 0">💰 Investido: ${fmt(investedThisMonth)}</div>`:''}
+      <div class="month-tags">${tags}</div>
+    </div>`;
+  }).join('');
+
+  const weakMonths=cal.filter(m=>m.count<=2).map(m=>m.monthFull).join(', ')||'Nenhum!';
+  const strongMonths=cal.filter(m=>m.count>=4).map(m=>m.monthFull).join(', ')||'Nenhum ainda';
+
+  return `<div class="grid3">${cardsHTML}</div>
+    <div class="card"><div class="card-title">Análise de Lacunas</div><div class="grid2">
+      <div class="gap-box gap-red"><div class="gap-title" style="color:var(--red)">MESES FRACOS (≤2 ações)</div><div style="font-size:13px">${weakMonths}</div><div style="font-size:11px;color:var(--text-muted);margin-top:8px">Sugestão: AbbVie (ABBV) Fev/Mai/Ago/Nov • Main Street Capital (MAIN) mensal</div></div>
+      <div class="gap-box gap-green"><div class="gap-title" style="color:var(--green)">MESES FORTES (≥4 ações)</div><div style="font-size:13px">${strongMonths}</div><div style="font-size:11px;color:var(--text-muted);margin-top:8px">Boa cobertura de dividendos</div></div>
+    </div></div>`;
+}
+
+// ══════════════════════════════════════════
+// WATCHLIST
+// ══════════════════════════════════════════
+function renderWatchlist(){
+  let stockRows=(state.watchlistStocks||[]).map((w,i)=>{
+    const intColor=w.interest==='SIM'?'badge-green':w.interest==='ANALISAR'?'badge-yellow':'badge-purple';
+    return `<tr>
+      <td style="font-weight:800;color:var(--accent)">${w.ticker}</td><td>${w.name}</td>
+      <td><span class="badge badge-purple">${w.sector||'-'}</span></td>
+      <td class="text-right" style="font-weight:700;color:${w.divYield>=5?'var(--green)':'var(--yellow)'}">${w.divYield}%</td>
+      <td class="text-center">${w.freq}</td><td class="text-center">${w.months}</td>
+      <td class="text-center"><span class="badge ${intColor}">${w.interest}</span></td>
+      <td>${w.notes||''}</td>
+      <td class="text-center"><button class="btn btn-sm" onclick="editWatchlistStock(${i})">✏️</button> <button class="btn btn-sm btn-danger" onclick="deleteWatchlistStock(${i})">🗑️</button></td>
+    </tr>`;
+  }).join('');
+
+  let etfRows=(state.watchlistETFs||[]).map((w,i)=>`<tr>
+    <td style="font-weight:800;color:var(--accent)">${w.ticker||'-'}</td><td>${w.name}${w.isin?` <a href="https://www.justetf.com/en/etf-profile.html?isin=${w.isin}" target="_blank" class="link-ext">↗ JustETF</a>`:''}</td>
+    <td class="text-center"><span class="badge ${w.type==='DIST'?'badge-green':'badge-purple'}">${w.type||'ACC'}</span></td>
+    <td class="text-center">${w.interest||'-'}</td><td>${w.notes||''}</td>
+    <td class="text-center"><button class="btn btn-sm" onclick="editWatchlistETF(${i})">✏️</button> <button class="btn btn-sm btn-danger" onclick="deleteWatchlistETF(${i})">🗑️</button></td>
+  </tr>`).join('');
+
+  return `
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div class="card-title" style="margin:0">Watchlist — Ações</div>
+        <button class="btn btn-primary" onclick="addWatchlistStock()">+ Ação</button>
+      </div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Ticker</th><th>Empresa</th><th>Setor</th><th class="text-right">Yield</th><th class="text-center">Freq.</th><th class="text-center">Meses</th><th class="text-center">Interesse</th><th>Notas</th><th class="text-center">-</th></tr></thead>
+      <tbody>${stockRows||'<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:20px">Watchlist vazia</td></tr>'}</tbody></table></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div class="card-title" style="margin:0">Watchlist — ETFs</div>
+        <button class="btn btn-primary" onclick="addWatchlistETF()">+ ETF</button>
+      </div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Ticker</th><th>Nome</th><th class="text-center">Tipo</th><th class="text-center">Interesse</th><th>Notas</th><th class="text-center">-</th></tr></thead>
+      <tbody>${etfRows||'<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px">Watchlist ETFs vazia</td></tr>'}</tbody></table></div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════
+// HISTORY
+// ══════════════════════════════════════════
+function renderHistory(){
+  let divRows=(state.dividendsReceived||[]).map((d,i)=>`<tr>
+    <td>${d.date||'-'}</td><td style="font-weight:700;color:var(--accent)">${d.ticker}</td>
+    <td class="text-right">${d.shares}</td><td class="text-right">${fmt(d.grossEUR||0)}</td>
+    <td class="text-right">${fmt(d.taxEUR||0)}</td>
+    <td class="text-right" style="font-weight:700;color:var(--green)">${fmt(d.netEUR||0)}</td>
+    <td class="text-center"><button class="btn btn-sm btn-danger" onclick="deleteDivReceived(${i})">🗑️</button></td>
+  </tr>`).join('');
+
+  let decRows=(state.decisions||[]).map((d,i)=>`<tr>
+    <td>${d.month||'-'}</td><td style="font-weight:700;color:var(--accent)">${d.ticker}</td>
+    <td class="text-right">${fmt(d.amount||0)}</td><td>${d.reason||''}</td>
+    <td class="text-center"><button class="btn btn-sm btn-danger" onclick="deleteDecision(${i})">🗑️</button></td>
+  </tr>`).join('');
+
+  return `
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div class="card-title" style="margin:0">Dividendos Recebidos</div>
+        <button class="btn btn-primary" onclick="addDivReceived()">+ Registar Dividendo</button>
+      </div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Data</th><th>Ticker</th><th class="text-right">Nº Ações</th><th class="text-right">Bruto (€)</th><th class="text-right">Imposto (€)</th><th class="text-right">Líquido (€)</th><th class="text-center">-</th></tr></thead>
+      <tbody>${divRows||'<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:20px">Nenhum dividendo registado</td></tr>'}</tbody></table></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div class="card-title" style="margin:0">Decisões de Compra Mensais</div>
+        <button class="btn btn-primary" onclick="addDecision()">+ Registar Compra</button>
+      </div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Mês</th><th>Ticker</th><th class="text-right">Montante (€)</th><th>Razão</th><th class="text-center">-</th></tr></thead>
+      <tbody>${decRows||'<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">Nenhuma decisão registada</td></tr>'}</tbody></table></div>
+    </div>`;
+}
+
+
+// ══════════════════════════════════════════
+// CHARTS
+// ══════════════════════════════════════════
+function initCharts(){
+  Chart.defaults.color='#94a3b8';
+  Chart.defaults.borderColor='#1e293b';
+  Chart.defaults.font.family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+
+  if(activeTab==='overview'){
+    initDivMonthChart('chartDivMonth');
+    initStockAllocationChart();
+    initETFAllocationChart();
+    initPerformanceChart();
+  }
+  if(activeTab==='dividends'){
+    initDivMonthChart('chartDivBig');
+    initYieldChart();
+  }
+}
+
+function initDivMonthChart(canvasId){
+  const cal=calcDividendCalendar();
+  const avg=cal.reduce((a,b)=>a+b.total,0)/12;
+  const now=new Date();const curMonth=now.getMonth();const curYear=now.getFullYear();
+  const colors=cal.map((m,idx)=>{
+    if(selectedYear===curYear&&idx<curMonth)return '#475569';
+    if(selectedYear===curYear&&idx===curMonth)return '#60a5fa';
+    if(m.count<=2)return '#ef4444';
+    if(m.total>=avg)return '#3b82f6';
+    return '#1e40af';
+  });
+  const ctx=document.getElementById(canvasId);if(!ctx)return;
+  charts[canvasId]=new Chart(ctx,{
+    type:'bar',data:{labels:MONTHS,datasets:[{data:cal.map(c=>parseFloat(c.total.toFixed(2))),backgroundColor:colors,borderRadius:6,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#1e293b',borderColor:'#334155',borderWidth:1,titleFont:{weight:'bold'},callbacks:{label:ctx=>'€'+ctx.parsed.y.toFixed(2),afterLabel:ctx=>{const m=cal[ctx.dataIndex];return m.details.map(d=>`  ${d.ticker}: €${d.amount.toFixed(2)}`).join('\n')}}}},scales:{y:{beginAtZero:true,grid:{color:'#1e293b'},ticks:{callback:v=>'€'+v}},x:{grid:{display:false}}}}
+  });
+}
+
+function initStockAllocationChart(){
+  const sectors={};
+  state.stocks.forEach(s=>{
+    const sec=s.sector||'Other';
+    if(!sectors[sec])sectors[sec]=0;
+    sectors[sec]+=toEUR(s.volume*s.currentPrice,s.currency);
+  });
+  const labels=Object.keys(sectors);
+  const data=Object.values(sectors).map(v=>parseFloat(v.toFixed(2)));
+  const colors=labels.map(l=>SECTOR_COLORS[l]||'#64748b');
+  const ctx=document.getElementById('chartStockAlloc');if(!ctx)return;
+  charts.stockAlloc=new Chart(ctx,{
+    type:'doughnut',data:{labels,datasets:[{data,backgroundColor:colors,borderWidth:0,hoverOffset:8}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'bottom',labels:{padding:12,usePointStyle:true,pointStyle:'circle',font:{size:10}}},tooltip:{backgroundColor:'#1e293b',borderColor:'#334155',borderWidth:1,callbacks:{label:ctx=>` ${ctx.label}: €${ctx.parsed.toFixed(2)} (${(ctx.parsed/data.reduce((a,b)=>a+b,0)*100).toFixed(1)}%)`}}}}
+  });
+}
+
+function initETFAllocationChart(){
+  const planTotals={};
+  state.etfs.forEach(e=>{
+    const plan=getPlan(e.planId);
+    if(!planTotals[plan.name])planTotals[plan.name]={total:0,color:plan.color};
+    planTotals[plan.name].total+=e.current;
+  });
+  const labels=Object.keys(planTotals);
+  const data=labels.map(l=>parseFloat(planTotals[l].total.toFixed(2)));
+  const colors=labels.map(l=>planTotals[l].color);
+  const ctx=document.getElementById('chartETFAlloc');if(!ctx)return;
+  charts.etfAlloc=new Chart(ctx,{
+    type:'doughnut',data:{labels,datasets:[{data,backgroundColor:colors,borderWidth:0,hoverOffset:8}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'bottom',labels:{padding:12,usePointStyle:true,pointStyle:'circle',font:{size:10}}},tooltip:{backgroundColor:'#1e293b',borderColor:'#334155',borderWidth:1,callbacks:{label:ctx=>` ${ctx.label}: €${ctx.parsed.toFixed(2)} (${(ctx.parsed/data.reduce((a,b)=>a+b,0)*100).toFixed(1)}%)`}}}}
+  });
+}
+
+function initPerformanceChart(){
+  const data=state.stocks.map(s=>({ticker:s.ticker,pl:((s.currentPrice-s.buyPrice)/s.buyPrice*100),yield:s.divYield}));
+  const ctx=document.getElementById('chartPerformance');if(!ctx)return;
+  charts.performance=new Chart(ctx,{
+    type:'bar',data:{labels:data.map(d=>d.ticker),datasets:[
+      {label:'P&L (%)',data:data.map(d=>parseFloat(d.pl.toFixed(2))),backgroundColor:data.map(d=>d.pl>=0?'rgba(16,185,129,.7)':'rgba(239,68,68,.7)'),borderRadius:6,yAxisID:'y'},
+      {label:'Div Yield (%)',data:data.map(d=>d.yield),type:'line',borderColor:'#f59e0b',backgroundColor:'#f59e0b',borderWidth:2.5,pointRadius:5,pointBackgroundColor:'#f59e0b',yAxisID:'y1'}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{usePointStyle:true,font:{size:11}}},tooltip:{backgroundColor:'#1e293b',borderColor:'#334155',borderWidth:1}},scales:{y:{beginAtZero:true,grid:{color:'#1e293b'},ticks:{callback:v=>v+'%'}},y1:{position:'right',beginAtZero:true,grid:{display:false},ticks:{callback:v=>v+'%'}},x:{grid:{display:false}}}}
+  });
+}
+
+function initYieldChart(){
+  const data=state.stocks.map(s=>({ticker:s.ticker,yield:s.divYield})).sort((a,b)=>b.yield-a.yield);
+  const ctx=document.getElementById('chartYield');if(!ctx)return;
+  charts.yield=new Chart(ctx,{
+    type:'bar',data:{labels:data.map(d=>d.ticker),datasets:[{data:data.map(d=>d.yield),backgroundColor:data.map(d=>d.yield>=5?'#10b981':d.yield>=4?'#f59e0b':'#3b82f6'),borderRadius:6}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#1e293b',borderColor:'#334155',borderWidth:1,callbacks:{label:ctx=>ctx.parsed.x+'%'}}},scales:{x:{beginAtZero:true,grid:{color:'#1e293b'},ticks:{callback:v=>v+'%'}},y:{grid:{display:false}}}}
+  });
+}
+
+
+// ══════════════════════════════════════════
+// CRUD OPERATIONS
+// ══════════════════════════════════════════
+function addStock(){
+  showModal('Adicionar Ação',`
+    <div class="form-grid">
+      <div class="form-row"><label>Ticker</label><input id="f_ticker" placeholder="MO, O, VICI..."></div>
+      <div class="form-row"><label>Empresa</label><input id="f_name"></div>
+      <div class="form-row"><label>Setor</label><select id="f_sector"><option>Technology</option><option>Healthcare</option><option>Financial</option><option>Energy</option><option>Consumer</option><option>Utilities</option><option>REIT</option><option>Tobacco</option><option>Industrial</option><option>Telecom</option><option>Other</option></select></div>
+      <div class="form-row"><label>Moeda Original</label><select id="f_currency"><option>USD</option><option>EUR</option></select></div>
+      <div class="form-row"><label>Volume</label><input id="f_volume" type="number" step="0.0001"></div>
+      <div class="form-row"><label>Preço Compra</label><input id="f_buyPrice" type="number" step="0.01"></div>
+      <div class="form-row"><label>Preço Atual</label><input id="f_currentPrice" type="number" step="0.01"></div>
+      <div class="form-row"><label>Div Yield (%)</label><input id="f_divYield" type="number" step="0.01"></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-row"><label>Div/Ação (moeda original)</label><input id="f_divPerShare" type="number" step="0.001"></div>
+      <div class="form-row"><label>Frequência</label><select id="f_freq"><option>Trimestral</option><option>Mensal</option><option>Semestral</option><option>Anual</option></select></div>
+    </div>
+    <div class="form-row"><label>Meses de pagamento (1-12, separados por vírgula)</label><input id="f_months" placeholder="1,4,7,10"></div>
+  `,()=>{
+    state.stocks.push({
+      ticker:document.getElementById('f_ticker').value.toUpperCase(),
+      name:document.getElementById('f_name').value,
+      sector:document.getElementById('f_sector').value,
+      volume:parseFloat(document.getElementById('f_volume').value)||0,
+      buyPrice:parseFloat(document.getElementById('f_buyPrice').value)||0,
+      currentPrice:parseFloat(document.getElementById('f_currentPrice').value)||0,
+      currency:document.getElementById('f_currency').value,
+      divYield:parseFloat(document.getElementById('f_divYield').value)||0,
+      divPerShare:parseFloat(document.getElementById('f_divPerShare').value)||0,
+      freq:document.getElementById('f_freq').value,
+      months:document.getElementById('f_months').value.split(',').map(Number).filter(n=>n>=1&&n<=12)
+    });
+  });
+}
+
+function editStock(i){
+  const s=state.stocks[i];
+  const sectors=["Technology","Healthcare","Financial","Energy","Consumer","Utilities","REIT","Tobacco","Industrial","Telecom","Other"];
+  showModal('Editar — '+s.ticker,`
+    <div class="form-grid">
+      <div class="form-row"><label>Ticker</label><input id="f_ticker" value="${s.ticker}"></div>
+      <div class="form-row"><label>Empresa</label><input id="f_name" value="${s.name}"></div>
+      <div class="form-row"><label>Setor</label><select id="f_sector">${sectors.map(sec=>`<option ${s.sector===sec?'selected':''}>${sec}</option>`).join('')}</select></div>
+      <div class="form-row"><label>Moeda</label><select id="f_currency"><option ${s.currency==='USD'?'selected':''}>USD</option><option ${s.currency==='EUR'?'selected':''}>EUR</option></select></div>
+      <div class="form-row"><label>Volume</label><input id="f_volume" type="number" step="0.0001" value="${s.volume}"></div>
+      <div class="form-row"><label>Preço Compra</label><input id="f_buyPrice" type="number" step="0.01" value="${s.buyPrice}"></div>
+      <div class="form-row"><label>Preço Atual</label><input id="f_currentPrice" type="number" step="0.01" value="${s.currentPrice}"></div>
+      <div class="form-row"><label>Div Yield (%)</label><input id="f_divYield" type="number" step="0.01" value="${s.divYield}"></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-row"><label>Div/Ação</label><input id="f_divPerShare" type="number" step="0.001" value="${s.divPerShare}"></div>
+      <div class="form-row"><label>Frequência</label><select id="f_freq"><option ${s.freq==='Trimestral'?'selected':''}>Trimestral</option><option ${s.freq==='Mensal'?'selected':''}>Mensal</option><option ${s.freq==='Semestral'?'selected':''}>Semestral</option><option ${s.freq==='Anual'?'selected':''}>Anual</option></select></div>
+    </div>
+    <div class="form-row"><label>Meses pagamento</label><input id="f_months" value="${s.months.join(',')}"></div>
+  `,()=>{Object.assign(state.stocks[i],{ticker:document.getElementById('f_ticker').value.toUpperCase(),name:document.getElementById('f_name').value,sector:document.getElementById('f_sector').value,volume:parseFloat(document.getElementById('f_volume').value)||0,buyPrice:parseFloat(document.getElementById('f_buyPrice').value)||0,currentPrice:parseFloat(document.getElementById('f_currentPrice').value)||0,currency:document.getElementById('f_currency').value,divYield:parseFloat(document.getElementById('f_divYield').value)||0,divPerShare:parseFloat(document.getElementById('f_divPerShare').value)||0,freq:document.getElementById('f_freq').value,months:document.getElementById('f_months').value.split(',').map(Number).filter(n=>n>=1&&n<=12)})});
+}
+
+function deleteStock(i){if(confirm('Remover '+state.stocks[i].ticker+'?')){state.stocks.splice(i,1);saveData();render()}}
+
+function updateAllPrices(){
+  showModal('Atualizar Preços Manual',state.stocks.map((s,i)=>`<div class="form-row" style="display:flex;gap:10px;align-items:center"><label style="width:70px;font-weight:700;color:var(--accent)">${s.ticker}</label><input id="f_price_${i}" type="number" step="0.01" value="${s.currentPrice}" style="flex:1"><span style="font-size:10px;color:var(--text-dim)">${s.currency}</span></div>`).join(''),()=>{state.stocks.forEach((s,i)=>{s.currentPrice=parseFloat(document.getElementById('f_price_'+i).value)||s.currentPrice});state.lastPriceUpdate=new Date().toISOString()});
+}
+
+// ETF CRUD
+function addETF(){
+  const planOpts=(state.plans||[]).map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  showModal('Adicionar ETF',`
+    <div class="form-row"><label>Plano</label><select id="f_plan">${planOpts}</select></div>
+    <div class="form-grid">
+      <div class="form-row"><label>Ticker</label><input id="f_ticker" placeholder="CSPX, VHYL..."></div>
+      <div class="form-row"><label>ISIN</label><input id="f_isin" placeholder="IE00B5BMR087"></div>
+    </div>
+    <div class="form-row"><label>Nome</label><input id="f_name"></div>
+    <div class="form-row"><label>Tipo</label><select id="f_type"><option>ACC</option><option>DIST</option></select></div>
+    <div class="form-grid">
+      <div class="form-row"><label>Investido (€)</label><input id="f_invested" type="number" step="0.01"></div>
+      <div class="form-row"><label>Valor Atual (€)</label><input id="f_current" type="number" step="0.01"></div>
+    </div>
+  `,()=>{state.etfs.push({planId:document.getElementById('f_plan').value,ticker:document.getElementById('f_ticker').value.toUpperCase(),isin:document.getElementById('f_isin').value.trim(),name:document.getElementById('f_name').value,type:document.getElementById('f_type').value,invested:parseFloat(document.getElementById('f_invested').value)||0,current:parseFloat(document.getElementById('f_current').value)||0})});
+}
+
+function editETF(i){
+  const e=state.etfs[i];
+  const planOpts=(state.plans||[]).map(p=>`<option value="${p.id}" ${e.planId===p.id?'selected':''}>${p.name}</option>`).join('');
+  showModal('Editar ETF',`
+    <div class="form-row"><label>Plano</label><select id="f_plan">${planOpts}</select></div>
+    <div class="form-grid">
+      <div class="form-row"><label>Ticker</label><input id="f_ticker" value="${e.ticker||''}"></div>
+      <div class="form-row"><label>ISIN</label><input id="f_isin" value="${e.isin||''}"></div>
+    </div>
+    <div class="form-row"><label>Nome</label><input id="f_name" value="${e.name}"></div>
+    <div class="form-row"><label>Tipo</label><select id="f_type"><option ${e.type==='ACC'?'selected':''}>ACC</option><option ${e.type==='DIST'?'selected':''}>DIST</option></select></div>
+    <div class="form-grid">
+      <div class="form-row"><label>Investido (€)</label><input id="f_invested" type="number" step="0.01" value="${e.invested}"></div>
+      <div class="form-row"><label>Valor Atual (€)</label><input id="f_current" type="number" step="0.01" value="${e.current}"></div>
+    </div>
+  `,()=>{Object.assign(state.etfs[i],{planId:document.getElementById('f_plan').value,ticker:document.getElementById('f_ticker').value.toUpperCase(),isin:document.getElementById('f_isin').value.trim(),name:document.getElementById('f_name').value,type:document.getElementById('f_type').value,invested:parseFloat(document.getElementById('f_invested').value)||0,current:parseFloat(document.getElementById('f_current').value)||0})});
+}
+
+function deleteETF(i){if(confirm('Remover '+state.etfs[i].name+'?')){state.etfs.splice(i,1);saveData();render()}}
+
+// PLAN MANAGEMENT
+function managePlans(){
+  const plansHTML=(state.plans||[]).map((p,i)=>`
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;padding:8px;background:var(--bg);border-radius:8px">
+      <span style="width:16px;height:16px;border-radius:50%;background:${p.color};flex-shrink:0"></span>
+      <input id="pname_${i}" value="${p.name}" style="flex:1;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:13px">
+      <input id="pcolor_${i}" type="color" value="${p.color}" style="width:36px;height:30px;border:none;background:none;cursor:pointer">
+      <button class="btn btn-sm btn-danger" onclick="deletePlan(${i})">🗑️</button>
+    </div>
+  `).join('');
+
+  showModal('Gerir Planos de ETFs',`
+    ${plansHTML}
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+      <div class="form-grid">
+        <div class="form-row"><label>Novo Plano</label><input id="f_newPlanName" placeholder="Nome do plano"></div>
+        <div class="form-row"><label>Cor</label><input id="f_newPlanColor" type="color" value="#06b6d4"></div>
+      </div>
+      <button class="btn btn-sm" onclick="document.getElementById('f_newPlanAdded').value='1'" style="margin-top:8px">+ Adicionar Plano</button>
+      <input type="hidden" id="f_newPlanAdded" value="0">
+    </div>
+  `,()=>{
+    state.plans.forEach((p,i)=>{
+      p.name=document.getElementById('pname_'+i).value;
+      p.color=document.getElementById('pcolor_'+i).value;
+    });
+    const newName=document.getElementById('f_newPlanName').value.trim();
+    if(newName){
+      state.plans.push({id:newName.toLowerCase().replace(/\s+/g,'_')+'_'+Date.now(),name:newName,color:document.getElementById('f_newPlanColor').value});
+    }
+  });
+}
+
+function deletePlan(i){
+  const plan=state.plans[i];
+  const hasETFs=state.etfs.some(e=>e.planId===plan.id);
+  if(hasETFs){alert('Não podes remover um plano com ETFs. Remove os ETFs primeiro.');return}
+  state.plans.splice(i,1);saveData();render();
+}
+
+// WATCHLIST CRUD
+function addWatchlistStock(){
+  showModal('Adicionar à Watchlist',`
+    <div class="form-grid">
+      <div class="form-row"><label>Ticker</label><input id="f_ticker"></div>
+      <div class="form-row"><label>Empresa</label><input id="f_name"></div>
+      <div class="form-row"><label>Setor</label><select id="f_sector"><option>Technology</option><option>Healthcare</option><option>Financial</option><option>Energy</option><option>Consumer</option><option>Utilities</option><option>REIT</option><option>Tobacco</option><option>Industrial</option><option>Telecom</option><option>Other</option></select></div>
+      <div class="form-row"><label>Div Yield (%)</label><input id="f_divYield" type="number" step="0.01"></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-row"><label>Frequência</label><select id="f_freq"><option>Trimestral</option><option>Mensal</option><option>Semestral</option></select></div>
+      <div class="form-row"><label>Interesse</label><select id="f_interest"><option>SIM</option><option>TALVEZ</option><option>ANALISAR</option><option>NÃO</option></select></div>
+    </div>
+    <div class="form-row"><label>Meses Pagamento</label><input id="f_months" placeholder="Jan/Abr/Jul/Out"></div>
+    <div class="form-row"><label>Notas</label><input id="f_notes"></div>
+  `,()=>{if(!state.watchlistStocks)state.watchlistStocks=[];state.watchlistStocks.push({ticker:document.getElementById('f_ticker').value.toUpperCase(),name:document.getElementById('f_name').value,sector:document.getElementById('f_sector').value,divYield:parseFloat(document.getElementById('f_divYield').value)||0,freq:document.getElementById('f_freq').value,months:document.getElementById('f_months').value,interest:document.getElementById('f_interest').value,notes:document.getElementById('f_notes').value})});
+}
+
+function editWatchlistStock(i){
+  const w=state.watchlistStocks[i];
+  showModal('Editar Watchlist — '+w.ticker,`
+    <div class="form-grid">
+      <div class="form-row"><label>Ticker</label><input id="f_ticker" value="${w.ticker}"></div>
+      <div class="form-row"><label>Empresa</label><input id="f_name" value="${w.name}"></div>
+      <div class="form-row"><label>Div Yield (%)</label><input id="f_divYield" type="number" step="0.01" value="${w.divYield}"></div>
+      <div class="form-row"><label>Interesse</label><select id="f_interest"><option ${w.interest==='SIM'?'selected':''}>SIM</option><option ${w.interest==='TALVEZ'?'selected':''}>TALVEZ</option><option ${w.interest==='ANALISAR'?'selected':''}>ANALISAR</option><option ${w.interest==='NÃO'?'selected':''}>NÃO</option></select></div>
+    </div>
+    <div class="form-row"><label>Meses</label><input id="f_months" value="${w.months}"></div>
+    <div class="form-row"><label>Notas</label><input id="f_notes" value="${w.notes||''}"></div>
+  `,()=>{Object.assign(state.watchlistStocks[i],{ticker:document.getElementById('f_ticker').value.toUpperCase(),name:document.getElementById('f_name').value,divYield:parseFloat(document.getElementById('f_divYield').value)||0,months:document.getElementById('f_months').value,interest:document.getElementById('f_interest').value,notes:document.getElementById('f_notes').value})});
+}
+
+function deleteWatchlistStock(i){if(confirm('Remover?')){state.watchlistStocks.splice(i,1);saveData();render()}}
+
+function addWatchlistETF(){
+  showModal('Adicionar ETF à Watchlist',`
+    <div class="form-grid">
+      <div class="form-row"><label>Ticker</label><input id="f_ticker"></div>
+      <div class="form-row"><label>ISIN</label><input id="f_isin"></div>
+    </div>
+    <div class="form-row"><label>Nome</label><input id="f_name"></div>
+    <div class="form-grid">
+      <div class="form-row"><label>Tipo</label><select id="f_type"><option>ACC</option><option>DIST</option></select></div>
+      <div class="form-row"><label>Interesse</label><select id="f_interest"><option>SIM</option><option>TALVEZ</option><option>ANALISAR</option></select></div>
+    </div>
+    <div class="form-row"><label>Notas</label><input id="f_notes"></div>
+  `,()=>{if(!state.watchlistETFs)state.watchlistETFs=[];state.watchlistETFs.push({ticker:document.getElementById('f_ticker').value.toUpperCase(),isin:document.getElementById('f_isin').value.trim(),name:document.getElementById('f_name').value,type:document.getElementById('f_type').value,interest:document.getElementById('f_interest').value,notes:document.getElementById('f_notes').value})});
+}
+
+function editWatchlistETF(i){
+  const w=state.watchlistETFs[i];
+  showModal('Editar ETF Watchlist',`
+    <div class="form-grid"><div class="form-row"><label>Ticker</label><input id="f_ticker" value="${w.ticker||''}"></div><div class="form-row"><label>ISIN</label><input id="f_isin" value="${w.isin||''}"></div></div>
+    <div class="form-row"><label>Nome</label><input id="f_name" value="${w.name}"></div>
+    <div class="form-grid"><div class="form-row"><label>Tipo</label><select id="f_type"><option ${w.type==='ACC'?'selected':''}>ACC</option><option ${w.type==='DIST'?'selected':''}>DIST</option></select></div><div class="form-row"><label>Interesse</label><select id="f_interest"><option ${w.interest==='SIM'?'selected':''}>SIM</option><option ${w.interest==='TALVEZ'?'selected':''}>TALVEZ</option><option ${w.interest==='ANALISAR'?'selected':''}>ANALISAR</option></select></div></div>
+    <div class="form-row"><label>Notas</label><input id="f_notes" value="${w.notes||''}"></div>
+  `,()=>{Object.assign(state.watchlistETFs[i],{ticker:document.getElementById('f_ticker').value.toUpperCase(),isin:document.getElementById('f_isin').value.trim(),name:document.getElementById('f_name').value,type:document.getElementById('f_type').value,interest:document.getElementById('f_interest').value,notes:document.getElementById('f_notes').value})});
+}
+
+function deleteWatchlistETF(i){if(confirm('Remover?')){state.watchlistETFs.splice(i,1);saveData();render()}}
+
+// HISTORY CRUD
+function addDivReceived(){
+  showModal('Registar Dividendo Recebido (€)',`
+    <div class="form-grid">
+      <div class="form-row"><label>Data</label><input id="f_date" type="date"></div>
+      <div class="form-row"><label>Ticker</label><input id="f_ticker"></div>
+      <div class="form-row"><label>Nº Ações</label><input id="f_shares" type="number" step="0.0001"></div>
+      <div class="form-row"><label>Bruto (€)</label><input id="f_gross" type="number" step="0.01"></div>
+      <div class="form-row"><label>Imposto (€)</label><input id="f_tax" type="number" step="0.01" value="0"></div>
+      <div class="form-row"><label>Líquido (€)</label><input id="f_net" type="number" step="0.01"></div>
+    </div>
+  `,()=>{if(!state.dividendsReceived)state.dividendsReceived=[];state.dividendsReceived.push({date:document.getElementById('f_date').value,ticker:document.getElementById('f_ticker').value.toUpperCase(),shares:parseFloat(document.getElementById('f_shares').value)||0,grossEUR:parseFloat(document.getElementById('f_gross').value)||0,taxEUR:parseFloat(document.getElementById('f_tax').value)||0,netEUR:parseFloat(document.getElementById('f_net').value)||0})});
+}
+
+function deleteDivReceived(i){if(confirm('Remover?')){state.dividendsReceived.splice(i,1);saveData();render()}}
+
+function addDecision(){
+  showModal('Registar Compra',`
+    <div class="form-grid">
+      <div class="form-row"><label>Mês</label><input id="f_month" placeholder="Abr 2026"></div>
+      <div class="form-row"><label>Ticker</label><input id="f_ticker"></div>
+    </div>
+    <div class="form-row"><label>Montante (€)</label><input id="f_amount" type="number" step="0.01"></div>
+    <div class="form-row"><label>Razão</label><input id="f_reason" placeholder="Cobrir mês fraco..."></div>
+  `,()=>{if(!state.decisions)state.decisions=[];state.decisions.push({month:document.getElementById('f_month').value,ticker:document.getElementById('f_ticker').value.toUpperCase(),amount:parseFloat(document.getElementById('f_amount').value)||0,reason:document.getElementById('f_reason').value})});
+}
+
+function deleteDecision(i){if(confirm('Remover?')){state.decisions.splice(i,1);saveData();render()}}
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+loadAllAccounts();
+fetchFxRate().then(()=>{render();checkAutoRefresh()});
+</script>
+</body>
+</html>
