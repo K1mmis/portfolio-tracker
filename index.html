@@ -97,6 +97,29 @@ tr:hover{background:rgba(255,255,255,.02)}
 .color-picker-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .color-dot{width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all .15s}
 .color-dot:hover,.color-dot.selected{border-color:#fff;transform:scale(1.2)}
+.fire-layout{display:grid;grid-template-columns:340px 1fr;gap:24px;margin-bottom:24px}
+@media(max-width:900px){.fire-layout{grid-template-columns:1fr}}
+.fire-panel{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px}
+.fire-input-group{margin-bottom:18px}
+.fire-input-group label{display:block;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;font-weight:600}
+.fire-input-group input[type="number"],.fire-input-group input[type="text"]{width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:16px;font-weight:700}
+.fire-input-group input:focus{outline:none;border-color:var(--accent)}
+.fire-slider-row{display:flex;align-items:center;gap:12px}
+.fire-slider-row input[type="range"]{flex:1;-webkit-appearance:none;height:6px;border-radius:3px;background:var(--border);outline:none}
+.fire-slider-row input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--green);cursor:pointer;border:2px solid var(--bg)}
+.fire-slider-val{min-width:50px;text-align:center;font-size:14px;font-weight:800;color:var(--green);background:var(--bg);padding:4px 10px;border-radius:8px;border:1px solid var(--border)}
+.fire-result{background:linear-gradient(135deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:12px}
+.fire-result-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.fire-result-value{font-size:24px;font-weight:800}
+.fire-scenarios{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:20px}
+@media(max-width:700px){.fire-scenarios{grid-template-columns:1fr}}
+.fire-scenario{border-radius:12px;padding:16px;text-align:center}
+.fire-scenario-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.fire-scenario-value{font-size:22px;font-weight:800}
+.fire-scenario-sub{font-size:11px;margin-top:4px}
+.fire-milestone{padding:12px 16px;border-radius:10px;background:var(--bg);border:1px solid var(--border);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.fire-milestone-label{font-size:12px;color:var(--text-muted)}
+.fire-milestone-value{font-size:14px;font-weight:700}
 </style>
 </head>
 <body>
@@ -149,7 +172,8 @@ const TABS=[
   {id:"dividends",label:"💰 Dividendos"},
   {id:"calendar",label:"📅 Calendário"},
   {id:"watchlist",label:"👀 Watchlist"},
-  {id:"history",label:"📋 Histórico"}
+  {id:"history",label:"📋 Histórico"},
+  {id:"fire",label:"🔥 FIRE"}
 ];
 
 // ══════════════════════════════════════════
@@ -514,6 +538,7 @@ function renderContent(){
     case 'calendar':el.innerHTML=renderCalendar();break;
     case 'watchlist':el.innerHTML=renderWatchlist();break;
     case 'history':el.innerHTML=renderHistory();break;
+    case 'fire':el.innerHTML=renderFIRE();break;
   }
   setTimeout(initCharts,50);
 }
@@ -837,6 +862,9 @@ function initCharts(){
     initDivMonthChart('chartDivBig');
     initYieldChart();
   }
+  if(activeTab==='fire'){
+    initFIRECharts();
+  }
 }
 
 function initDivMonthChart(canvasId){
@@ -912,6 +940,304 @@ function initYieldChart(){
   });
 }
 
+
+// ══════════════════════════════════════════
+// 🔥 FIRE CALCULATOR
+// ══════════════════════════════════════════
+function getFireDefaults(){
+  const t=calcTotals();
+  return{
+    currentAge:30,retireAge:67,investYears:20,
+    annualSpend:15000,currentAssets:Math.round(t.totalCur),monthlyContrib:200,
+    growthRate:7,inflationRate:3,swr:4
+  };
+}
+
+function renderFIRE(){
+  const fd=state.fireSettings||getFireDefaults();
+  // Pre-calculate to show results
+  const calc=calcFIRE(fd);
+
+  return `
+    <div class="fire-layout">
+      <div class="fire-panel">
+        <h3 style="font-size:16px;font-weight:800;margin-bottom:20px;background:linear-gradient(135deg,#f97316,#ef4444);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Calculadora FIRE</h3>
+        
+        <div class="fire-input-group">
+          <label>Idade Atual</label>
+          <input type="number" id="fire_age" value="${fd.currentAge}" onchange="updateFIRE()">
+        </div>
+        <div class="fire-input-group">
+          <label>Idade de Reforma</label>
+          <input type="number" id="fire_retireAge" value="${fd.retireAge}" onchange="updateFIRE()">
+        </div>
+        <div class="fire-input-group">
+          <label>Anos que pretendo investir</label>
+          <input type="number" id="fire_investYears" value="${fd.investYears}" onchange="updateFIRE()">
+          <div style="font-size:10px;color:var(--text-dim);margin-top:4px">Se investir menos anos que até à reforma</div>
+        </div>
+        <div class="fire-input-group">
+          <label>Gastos Anuais na Reforma (€)</label>
+          <input type="number" id="fire_spend" value="${fd.annualSpend}" onchange="updateFIRE()">
+        </div>
+        <div class="fire-input-group">
+          <label>Capital Investido Atual (€)</label>
+          <input type="number" id="fire_assets" value="${fd.currentAssets}" onchange="updateFIRE()">
+        </div>
+        <div class="fire-input-group">
+          <label>Contribuição Mensal (€)</label>
+          <input type="number" id="fire_monthly" value="${fd.monthlyContrib}" onchange="updateFIRE()">
+        </div>
+        
+        <div class="fire-input-group">
+          <label>Taxa de Crescimento do Investimento</label>
+          <div class="fire-slider-row">
+            <input type="range" id="fire_growth" min="2" max="14" step="0.5" value="${fd.growthRate}" oninput="document.getElementById('fire_growth_val').textContent=this.value+'%';updateFIRE()">
+            <span class="fire-slider-val" id="fire_growth_val">${fd.growthRate}%</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-top:2px"><span>2%</span><span>Conservador</span><span>S&P500 ~10%</span><span>14%</span></div>
+        </div>
+        
+        <div class="fire-input-group">
+          <label>Taxa de Inflação</label>
+          <div class="fire-slider-row">
+            <input type="range" id="fire_inflation" min="1" max="6" step="0.5" value="${fd.inflationRate}" oninput="document.getElementById('fire_inflation_val').textContent=this.value+'%';updateFIRE()">
+            <span class="fire-slider-val" id="fire_inflation_val">${fd.inflationRate}%</span>
+          </div>
+        </div>
+        
+        <div class="fire-input-group">
+          <label>Taxa de Levantamento Segura (SWR)</label>
+          <div class="fire-slider-row">
+            <input type="range" id="fire_swr" min="2" max="6" step="0.5" value="${fd.swr}" oninput="document.getElementById('fire_swr_val').textContent=this.value+'%';updateFIRE()">
+            <span class="fire-slider-val" id="fire_swr_val">${fd.swr}%</span>
+          </div>
+          <div style="font-size:9px;color:var(--text-dim);margin-top:2px">Regra dos 4%: Podes levantar 4% ao ano sem esgotar o capital</div>
+        </div>
+      </div>
+      
+      <div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title">Projeção do Património</div>
+          <div class="chart-wrap"><canvas id="chartFIRE" height="350"></canvas></div>
+        </div>
+        
+        <div class="fire-scenarios">
+          <div class="fire-scenario" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3)">
+            <div class="fire-scenario-title" style="color:var(--red)">🎯 Número FIRE</div>
+            <div class="fire-scenario-value" style="color:var(--red)" id="fire_number">${fmt(calc.fireNumber)}</div>
+            <div class="fire-scenario-sub" style="color:var(--text-muted)">Capital necessário para viver de rendimentos</div>
+          </div>
+          <div class="fire-scenario" style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3)">
+            <div class="fire-scenario-title" style="color:var(--accent)">🏖️ Coast FIRE</div>
+            <div class="fire-scenario-value" style="color:var(--accent)" id="fire_coast">${fmt(calc.coastFIRE)}</div>
+            <div class="fire-scenario-sub" style="color:var(--text-muted)">Capital hoje que cresce sozinho até à reforma</div>
+          </div>
+          <div class="fire-scenario" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3)">
+            <div class="fire-scenario-title" style="color:var(--green)">📊 Na Reforma Terás</div>
+            <div class="fire-scenario-value" style="color:var(--green)" id="fire_atretire">${fmt(calc.atRetirement)}</div>
+            <div class="fire-scenario-sub" style="color:var(--text-muted)">Se investires ${fd.investYears} anos</div>
+          </div>
+        </div>
+        
+        <div class="card" style="margin-top:16px">
+          <div class="card-title">Marcos Importantes</div>
+          <div id="fireMilestones">
+            ${calc.milestones.map(m=>`<div class="fire-milestone">
+              <div><div style="font-size:13px;font-weight:700;color:var(--text)">${m.label}</div><div class="fire-milestone-label">${m.desc}</div></div>
+              <div class="fire-milestone-value" style="color:${m.color}">${m.value}</div>
+            </div>`).join('')}
+          </div>
+        </div>
+        
+        <div class="card" style="margin-top:16px">
+          <div class="card-title">Cenários de Crescimento</div>
+          <div class="chart-wrap"><canvas id="chartFIREScenarios" height="250"></canvas></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function calcFIRE(fd){
+  const realReturn=(1+fd.growthRate/100)/(1+fd.inflationRate/100)-1;
+  const fireNumber=fd.annualSpend/(fd.swr/100);
+  const yearsToRetire=fd.retireAge-fd.currentAge;
+  const coastFIRE=fireNumber/Math.pow(1+realReturn,yearsToRetire);
+  
+  // Project with contributions for investYears, then growth only
+  const projFull=[];const projInvestOnly=[];const projNoContrib=[];
+  let balFull=fd.currentAssets;let balInvest=fd.currentAssets;let balCoast=fd.currentAssets;
+  const monthlyReturn=Math.pow(1+fd.growthRate/100,1/12)-1;
+  
+  for(let y=0;y<=yearsToRetire;y++){
+    projFull.push({age:fd.currentAge+y,value:balFull});
+    projInvestOnly.push({age:fd.currentAge+y,value:balInvest});
+    projNoContrib.push({age:fd.currentAge+y,value:balCoast});
+    
+    // Full contributions until retirement
+    for(let m=0;m<12;m++){
+      balFull=balFull*(1+monthlyReturn)+fd.monthlyContrib;
+    }
+    // Contributions only for investYears
+    for(let m=0;m<12;m++){
+      if(y<fd.investYears){
+        balInvest=balInvest*(1+monthlyReturn)+fd.monthlyContrib;
+      }else{
+        balInvest=balInvest*(1+monthlyReturn);
+      }
+    }
+    // No contributions (coast)
+    for(let m=0;m<12;m++){
+      balCoast=balCoast*(1+monthlyReturn);
+    }
+  }
+
+  const atRetirement=projInvestOnly[projInvestOnly.length-1]?.value||0;
+  const atRetirementFull=projFull[projFull.length-1]?.value||0;
+  
+  // Coast FIRE age: when does balCoast reach fireNumber?
+  let coastAge=null;
+  for(const p of projNoContrib){if(p.value>=fireNumber){coastAge=p.age;break}}
+  
+  // FIRE age with full contributions
+  let fireAge=null;
+  for(const p of projFull){if(p.value>=fireNumber){fireAge=p.age;break}}
+  
+  // When investOnly reaches fireNumber
+  let fireAgeInvest=null;
+  for(const p of projInvestOnly){if(p.value>=fireNumber){fireAgeInvest=p.age;break}}
+
+  // Milestones
+  const milestones=[];
+  if(fireAge)milestones.push({label:`FIRE aos ${fireAge} anos`,desc:'Se investires todos os meses até lá',value:fmt(fireNumber),color:'var(--green)'});
+  else milestones.push({label:'FIRE não atingido antes da reforma',desc:'Aumenta contribuição ou reduz gastos',value:'—',color:'var(--red)'});
+  
+  if(fireAgeInvest)milestones.push({label:`FIRE aos ${fireAgeInvest} anos (${fd.investYears}a invest.)`,desc:`Se investires durante ${fd.investYears} anos e depois parares`,value:fmt(fireNumber),color:'var(--accent)'});
+  else milestones.push({label:`Após ${fd.investYears} anos de investimento`,desc:'Capital acumulado quando parares de investir',value:fmt(projInvestOnly[Math.min(fd.investYears,projInvestOnly.length-1)]?.value||0),color:'var(--accent)'});
+  
+  milestones.push({label:'Na idade de reforma ('+fd.retireAge+')',desc:'Investindo '+fd.investYears+' anos',value:fmt(atRetirement),color:'var(--yellow)'});
+  milestones.push({label:'Na idade de reforma ('+fd.retireAge+')',desc:'Investindo até à reforma',value:fmt(atRetirementFull),color:'var(--green)'});
+  
+  const annualIncome4pct=atRetirement*0.04;
+  milestones.push({label:'Rendimento anual (regra 4%)',desc:'Quanto podes levantar por ano na reforma',value:fmt(annualIncome4pct)+'/ano ('+fmt(annualIncome4pct/12)+'/mês)',color:'var(--cyan)'});
+
+  const totalContribInvest=fd.currentAssets+fd.monthlyContrib*12*fd.investYears;
+  const totalContribFull=fd.currentAssets+fd.monthlyContrib*12*yearsToRetire;
+  milestones.push({label:'Total contribuído ('+fd.investYears+'a)',desc:'Capital que colocaste do bolso',value:fmt(totalContribInvest),color:'var(--text-muted)'});
+  milestones.push({label:'Juros compostos gerados',desc:'Dinheiro que o dinheiro fez',value:fmt(atRetirement-totalContribInvest),color:'var(--purple)'});
+
+  return{fireNumber,coastFIRE,atRetirement,atRetirementFull,projFull,projInvestOnly,projNoContrib,milestones,fireAge,coastAge};
+}
+
+function updateFIRE(){
+  const fd={
+    currentAge:parseInt(document.getElementById('fire_age').value)||30,
+    retireAge:parseInt(document.getElementById('fire_retireAge').value)||67,
+    investYears:parseInt(document.getElementById('fire_investYears').value)||20,
+    annualSpend:parseFloat(document.getElementById('fire_spend').value)||15000,
+    currentAssets:parseFloat(document.getElementById('fire_assets').value)||0,
+    monthlyContrib:parseFloat(document.getElementById('fire_monthly').value)||200,
+    growthRate:parseFloat(document.getElementById('fire_growth').value)||7,
+    inflationRate:parseFloat(document.getElementById('fire_inflation').value)||3,
+    swr:parseFloat(document.getElementById('fire_swr').value)||4
+  };
+  state.fireSettings=fd;
+  saveData();
+  
+  const calc=calcFIRE(fd);
+  
+  // Update results
+  document.getElementById('fire_number').textContent=fmt(calc.fireNumber);
+  document.getElementById('fire_coast').textContent=fmt(calc.coastFIRE);
+  document.getElementById('fire_atretire').textContent=fmt(calc.atRetirement);
+  
+  // Update milestones
+  document.getElementById('fireMilestones').innerHTML=calc.milestones.map(m=>`<div class="fire-milestone"><div><div style="font-size:13px;font-weight:700;color:var(--text)">${m.label}</div><div class="fire-milestone-label">${m.desc}</div></div><div class="fire-milestone-value" style="color:${m.color}">${m.value}</div></div>`).join('');
+  
+  // Update charts
+  destroyCharts();
+  setTimeout(initCharts,50);
+}
+
+function initFIRECharts(){
+  const fd=state.fireSettings||getFireDefaults();
+  const calc=calcFIRE(fd);
+  
+  // Main projection chart
+  const labels=calc.projFull.map(p=>p.age);
+  const ctx=document.getElementById('chartFIRE');
+  if(ctx){
+    charts.fire=new Chart(ctx,{
+      type:'line',
+      data:{
+        labels,
+        datasets:[
+          {label:'Investir até à reforma',data:calc.projFull.map(p=>Math.round(p.value)),borderColor:'rgba(16,185,129,.8)',backgroundColor:'rgba(16,185,129,.1)',fill:true,tension:.3,borderWidth:2,pointRadius:0},
+          {label:'Investir '+fd.investYears+' anos',data:calc.projInvestOnly.map(p=>Math.round(p.value)),borderColor:'rgba(59,130,246,.8)',backgroundColor:'rgba(59,130,246,.1)',fill:true,tension:.3,borderWidth:2,pointRadius:0},
+          {label:'Sem contribuições (Coast)',data:calc.projNoContrib.map(p=>Math.round(p.value)),borderColor:'rgba(148,163,184,.5)',backgroundColor:'rgba(148,163,184,.05)',fill:true,tension:.3,borderWidth:1.5,pointRadius:0,borderDash:[5,5]},
+          {label:'Número FIRE',data:labels.map(()=>calc.fireNumber),borderColor:'rgba(239,68,68,.7)',borderWidth:2,pointRadius:0,borderDash:[8,4],fill:false}
+        ]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        interaction:{mode:'index',intersect:false},
+        plugins:{
+          legend:{labels:{usePointStyle:true,font:{size:11},padding:16}},
+          tooltip:{backgroundColor:'#1e293b',borderColor:'#334155',borderWidth:1,callbacks:{label:ctx=>` ${ctx.dataset.label}: €${ctx.parsed.y.toLocaleString('pt-PT')}`}}
+        },
+        scales:{
+          y:{beginAtZero:true,grid:{color:'#1e293b'},ticks:{callback:v=>{if(v>=1000000)return '€'+Math.round(v/1000000)+'M';if(v>=1000)return '€'+Math.round(v/1000)+'k';return '€'+v}}},
+          x:{grid:{display:false},title:{display:true,text:'Idade (anos)',color:'var(--text-dim)'}}
+        }
+      }
+    });
+  }
+  
+  // Scenarios chart (pessimistic, realistic, optimistic)
+  const ctx2=document.getElementById('chartFIREScenarios');
+  if(ctx2){
+    const scenarios=[
+      {label:'Pessimista (4%)',rate:4,color:'rgba(239,68,68,.7)'},
+      {label:'Conservador (6%)',rate:6,color:'rgba(245,158,11,.7)'},
+      {label:'Realista S&P500 (8%)',rate:8,color:'rgba(59,130,246,.7)'},
+      {label:'Otimista (10%)',rate:10,color:'rgba(16,185,129,.7)'}
+    ];
+    const yearsToRetire=fd.retireAge-fd.currentAge;
+    const scenarioData=scenarios.map(s=>{
+      let bal=fd.currentAssets;
+      const mr=Math.pow(1+s.rate/100,1/12)-1;
+      const points=[];
+      for(let y=0;y<=yearsToRetire;y++){
+        points.push(Math.round(bal));
+        for(let m=0;m<12;m++){
+          if(y<fd.investYears)bal=bal*(1+mr)+fd.monthlyContrib;
+          else bal=bal*(1+mr);
+        }
+      }
+      return{...s,data:points};
+    });
+    
+    charts.fireScenarios=new Chart(ctx2,{
+      type:'line',
+      data:{
+        labels:Array.from({length:yearsToRetire+1},(_,i)=>fd.currentAge+i),
+        datasets:scenarioData.map(s=>({label:s.label,data:s.data,borderColor:s.color,borderWidth:2,tension:.3,pointRadius:0,fill:false}))
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        interaction:{mode:'index',intersect:false},
+        plugins:{
+          legend:{labels:{usePointStyle:true,font:{size:10}}},
+          tooltip:{backgroundColor:'#1e293b',borderColor:'#334155',borderWidth:1,callbacks:{label:ctx=>` ${ctx.dataset.label}: €${ctx.parsed.y.toLocaleString('pt-PT')}`}}
+        },
+        scales:{
+          y:{beginAtZero:true,grid:{color:'#1e293b'},ticks:{callback:v=>{if(v>=1000000)return '€'+Math.round(v/1000000)+'M';if(v>=1000)return '€'+Math.round(v/1000)+'k';return '€'+v}}},
+          x:{grid:{display:false},title:{display:true,text:'Idade (anos)',color:'var(--text-dim)'}}
+        }
+      }
+    });
+  }
+}
 
 // ══════════════════════════════════════════
 // CRUD OPERATIONS
