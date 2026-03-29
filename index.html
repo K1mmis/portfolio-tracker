@@ -964,7 +964,7 @@ function initStockAllocationChart(){
   const ctx=document.getElementById('chartStockAlloc');if(!ctx)return;
   charts.stockAlloc=new Chart(ctx,{
     type:'doughnut',data:{labels,datasets:[{data,backgroundColor:colors,borderWidth:0,hoverOffset:8}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'bottom',labels:{padding:12,usePointStyle:true,pointStyle:'circle',font:{size:10}}},tooltip:{backgroundColor:'#1e293b',borderColor:'#334155',borderWidth:1,callbacks:{label:ctx=>` ${ctx.label}: €${ctx.parsed.toFixed(2)} (${(ctx.parsed/data.reduce((a,b)=>a+b,0)*100).toFixed(1)}%)`}}}}
+    options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'bottom',labels:{padding:12,usePointStyle:true,pointStyle:'circle',font:{size:10}}},tooltip:{backgroundColor:'#1e293b',borderColor:'#334155',borderWidth:1,callbacks:{label:function(tip){var t=data.reduce(function(a,b){return a+b},0);return ' '+tip.label+': \u20ac'+tip.parsed.toFixed(2)+' ('+(tip.parsed/t*100).toFixed(1)+'%)'},afterLabel:function(tip){var sec=labels[tip.dataIndex];var list=state.stocks.filter(function(s){return(s.sector||'Other')===sec});return list.map(function(s){return '  '+s.ticker+': \u20ac'+toEUR(s.volume*s.currentPrice,s.currency).toFixed(2)}).join('\n')}}}}}
   });
 }
 
@@ -981,7 +981,7 @@ function initETFAllocationChart(){
   const ctx=document.getElementById('chartETFAlloc');if(!ctx)return;
   charts.etfAlloc=new Chart(ctx,{
     type:'doughnut',data:{labels,datasets:[{data,backgroundColor:colors,borderWidth:0,hoverOffset:8}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'bottom',labels:{padding:12,usePointStyle:true,pointStyle:'circle',font:{size:10}}},tooltip:{backgroundColor:'#1e293b',borderColor:'#334155',borderWidth:1,callbacks:{label:ctx=>` ${ctx.label}: €${ctx.parsed.toFixed(2)} (${(ctx.parsed/data.reduce((a,b)=>a+b,0)*100).toFixed(1)}%)`}}}}
+    options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'bottom',labels:{padding:12,usePointStyle:true,pointStyle:'circle',font:{size:10}}},tooltip:{backgroundColor:'#1e293b',borderColor:'#334155',borderWidth:1,callbacks:{label:function(tip){var t=data.reduce(function(a,b){return a+b},0);return ' '+tip.label+': \u20ac'+tip.parsed.toFixed(2)+' ('+(tip.parsed/t*100).toFixed(1)+'%)'},afterLabel:function(tip){var pName=labels[tip.dataIndex];var plan=(state.plans||[]).find(function(p){return p.name===pName});if(!plan)return '';var list=state.etfs.filter(function(e){return e.planId===plan.id});return list.map(function(e){return '  '+(e.ticker||'')+' '+e.name.substring(0,25)+': \u20ac'+e.current.toFixed(2)}).join('\n')}}}}}
   });
 }
 
@@ -1197,8 +1197,8 @@ function calcFIRE(fd){
 
   // Milestones
   const milestones=[];
-  if(fireAge)milestones.push({label:`FIRE aos ${fireAge} anos`,desc:'Se investires todos os meses até lá',value:fmt(fireNumber),color:'var(--green)'});
-  else milestones.push({label:'FIRE não atingido antes da reforma',desc:'Aumenta contribuição ou reduz gastos',value:'—',color:'var(--red)'});
+  if(fireAge&&fireAge<=fd.retireAge)milestones.push({label:`FIRE aos ${fireAge} anos`,desc:'Se investires todos os meses até lá',value:fmt(fireNumber),color:'var(--green)'});
+  else{milestones.push({label:`FIRE não atingido antes dos ${fd.retireAge}`,desc:'Aumenta contribuição mensal ou reduz gastos anuais',value:'Faltam '+fmt(Math.max(0,fireNumber-atRetirementFull)),color:'var(--red)'});var fv=Math.pow(1+fd.growthRate/100,yearsToRetire);var needed=(fireNumber-fd.currentAssets*fv)/(((fv-1)/(fd.growthRate/100)));if(needed>0)milestones.push({label:'Contribuição necessária para FIRE',desc:'Valor anual necessário',value:fmt(Math.ceil(needed/12))+'/mês ('+fmt(Math.ceil(needed))+'/ano)',color:'var(--yellow)'})}
   
   if(fireAgeInvest)milestones.push({label:`FIRE aos ${fireAgeInvest} anos (${fd.investYears}a invest.)`,desc:`Se investires durante ${fd.investYears} anos e depois parares`,value:fmt(fireNumber),color:'var(--accent)'});
   else milestones.push({label:`Após ${fd.investYears} anos de investimento`,desc:'Capital acumulado quando parares de investir',value:fmt(projInvestOnly[Math.min(fd.investYears,projInvestOnly.length-1)]?.value||0),color:'var(--accent)'});
