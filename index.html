@@ -126,6 +126,32 @@ tr:hover{background:rgba(255,255,255,.02)}
 .fetch-btn{padding:4px 10px;font-size:10px;border-radius:6px;border:1px solid var(--accent);background:rgba(59,130,246,.1);color:var(--accent-light);cursor:pointer}
 .fetch-btn:hover{background:rgba(59,130,246,.2)}
 .fetch-btn.loading{opacity:.5;pointer-events:none}
+.feed-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-bottom:24px}
+.feed-item{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;transition:all .15s;cursor:pointer;text-decoration:none;color:var(--text);display:block}
+.feed-item:hover{border-color:var(--accent);transform:translateY(-2px)}
+.feed-source{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.feed-title{font-size:14px;font-weight:700;line-height:1.4;margin-bottom:6px}
+.feed-desc{font-size:12px;color:var(--text-muted);line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.feed-date{font-size:10px;color:var(--text-dim);margin-top:8px}
+.feed-filters{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.feed-filter{padding:5px 14px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text-muted);transition:all .15s}
+.feed-filter.active{background:rgba(59,130,246,.15);border-color:var(--accent);color:var(--accent-light)}
+.yt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-bottom:24px}
+.yt-card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:all .15s}
+.yt-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.yt-thumb{width:100%;aspect-ratio:16/9;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.yt-thumb img{width:100%;height:100%;object-fit:cover}
+.yt-info{padding:12px}
+.yt-channel{font-size:10px;font-weight:700;color:var(--accent-light);text-transform:uppercase;letter-spacing:1px}
+.yt-title{font-size:13px;font-weight:700;margin-top:4px;line-height:1.3}
+.links-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.link-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--text);transition:all .15s}
+.link-card:hover{border-color:var(--accent);background:var(--card2)}
+.link-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.link-name{font-size:13px;font-weight:700}
+.link-desc{font-size:11px;color:var(--text-muted)}
+.link-category{margin-bottom:20px}
+.link-category-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
 </style>
 </head>
 <body>
@@ -172,6 +198,7 @@ const MONTHS_FULL=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho"
 const PLAN_COLOR_OPTIONS=["#10b981","#3b82f6","#f97316","#8b5cf6","#f59e0b","#ec4899","#06b6d4","#ef4444","#84cc16","#14b8a6","#f43f5e","#a855f7"];
 const SECTOR_COLORS={"Technology":"#3b82f6","Healthcare":"#10b981","Financial":"#f59e0b","Energy":"#ef4444","Consumer":"#8b5cf6","Utilities":"#06b6d4","REIT":"#ec4899","Tobacco":"#f97316","Industrial":"#84cc16","Telecom":"#14b8a6","Other":"#64748b"};
 const TABS=[
+  {id:"feed",label:"📰 Feed"},
   {id:"overview",label:"📊 Resumo"},
   {id:"stocks",label:"📈 Ações"},
   {id:"etfs",label:"🏦 ETFs"},
@@ -179,7 +206,8 @@ const TABS=[
   {id:"calendar",label:"📅 Calendário"},
   {id:"watchlist",label:"👀 Watchlist"},
   {id:"history",label:"📋 Histórico"},
-  {id:"fire",label:"🔥 FIRE"}
+  {id:"fire",label:"🔥 FIRE"},
+  {id:"links",label:"🔗 Links Úteis"}
 ];
 
 // ══════════════════════════════════════════
@@ -189,7 +217,7 @@ let allAccounts={};
 let currentAccountId="";
 let state={};
 let selectedYear=new Date().getFullYear();
-let activeTab="overview";
+let activeTab="feed";
 let charts={};
 let fxRate=0.92; // EUR/USD default
 
@@ -211,6 +239,9 @@ function loadAllAccounts(){
         plans:JSON.parse(JSON.stringify(DEFAULT_PLANS)),
         watchlistStocks:JSON.parse(JSON.stringify(DEFAULT_WATCHLIST_STOCKS)),
         watchlistETFs:[],
+        feedSources:JSON.parse(JSON.stringify(DEFAULT_FEED_SOURCES)),
+        ytChannels:JSON.parse(JSON.stringify(DEFAULT_YT_CHANNELS)),
+        usefulLinks:JSON.parse(JSON.stringify(DEFAULT_USEFUL_LINKS)),
         dividendsReceived:[],
         decisions:[],
         lastUpdate:new Date().toISOString(),
@@ -220,6 +251,9 @@ function loadAllAccounts(){
   }
   currentAccountId=allAccounts._current||Object.keys(allAccounts).filter(k=>k!=='_current')[0];
   state=allAccounts[currentAccountId];
+  if(!state.feedSources)state.feedSources=JSON.parse(JSON.stringify(DEFAULT_FEED_SOURCES));
+  if(!state.ytChannels)state.ytChannels=JSON.parse(JSON.stringify(DEFAULT_YT_CHANNELS));
+  if(!state.usefulLinks)state.usefulLinks=JSON.parse(JSON.stringify(DEFAULT_USEFUL_LINKS));
   renderAccountSelector();
 }
 
@@ -309,6 +343,59 @@ const DEFAULT_ETFS=[
   {planId:"plano_inicial",name:"Xtrackers AI and Big Data UCITS",ticker:"XAIX",type:"ACC",invested:35.56,current:32.84,isin:"IE00BGV5VN51"},
   {planId:"plano_inicial",name:"VanEck AEX UCITS",ticker:"TAXE",type:"DIST",invested:35.60,current:35.24,isin:"NL0009272749"},
   {planId:"plano_inicial",name:"iShares $ Treasury Bond 3-7yr UCITS",ticker:"IUSM",type:"ACC",invested:36.62,current:36.50,isin:"IE00B3VWN518"}
+];
+
+const DEFAULT_FEED_SOURCES=[
+  {id:'reuters',name:'Reuters Business',url:'https://www.reuters.com/business/',color:'#ff8c00',enabled:true},
+  {id:'cnbc',name:'CNBC',url:'https://www.cnbc.com/world/',color:'#006daa',enabled:true},
+  {id:'bloomberg',name:'Bloomberg',url:'https://www.bloomberg.com/markets',color:'#472ba8',enabled:true},
+  {id:'ft',name:'Financial Times',url:'https://www.ft.com/',color:'#fff1e5',enabled:true},
+  {id:'eco',name:'ECO (Portugal)',url:'https://eco.sapo.pt/mercados/',color:'#00a651',enabled:true},
+  {id:'jnegocios',name:'Jornal de Negócios',url:'https://www.jornaldenegocios.pt/mercados',color:'#c8102e',enabled:true},
+  {id:'investing',name:'Investing.com',url:'https://www.investing.com/news/',color:'#2962ff',enabled:true},
+  {id:'seekalpha',name:'Seeking Alpha',url:'https://seekingalpha.com/market-news',color:'#f7971e',enabled:true}
+];
+
+const DEFAULT_YT_CHANNELS=[
+  {id:'yt1',name:'Tiago Ramos',channelUrl:'https://www.youtube.com/@TiagoRamosInvest',desc:'Investimentos PT',enabled:true},
+  {id:'yt2',name:'Gustavo Cerbasi',channelUrl:'https://www.youtube.com/@GustavoCerbasi',desc:'Finanças pessoais',enabled:true},
+  {id:'yt3',name:'Dividend Bull',channelUrl:'https://www.youtube.com/@DividendBull',desc:'Dividendos',enabled:true},
+  {id:'yt4',name:'Joseph Carlson',channelUrl:'https://www.youtube.com/@JosephCarlsonShow',desc:'Dividend investing',enabled:true},
+  {id:'yt5',name:'Andrei Jikh',channelUrl:'https://www.youtube.com/@AndreiJikh',desc:'Investing & Finance',enabled:true},
+  {id:'yt6',name:'The Plain Bagel',channelUrl:'https://www.youtube.com/@ThePlainBagel',desc:'Finance education',enabled:true}
+];
+
+const DEFAULT_USEFUL_LINKS=[
+  {category:'Ferramentas',links:[
+    {name:'justETF Screener',url:'https://www.justetf.com/en/etf-screener.html',icon:'📊',desc:'Pesquisa e filtra ETFs'},
+    {name:'Getquin',url:'https://www.getquin.com/',icon:'📱',desc:'Portfolio tracker social'},
+    {name:'WalletBurst FIRE Calc',url:'https://walletburst.com/tools/coast-fire-calc/',icon:'🔥',desc:'Calculadora Coast FIRE'},
+    {name:'Portfolio Visualizer',url:'https://www.portfoliovisualizer.com/',icon:'📈',desc:'Backtest e análise de portfolios'},
+    {name:'TradingView',url:'https://www.tradingview.com/',icon:'📉',desc:'Gráficos e análise técnica'}
+  ]},
+  {category:'Corretoras',links:[
+    {name:'XTB xStation',url:'https://xstation5.xtb.com/?branch=pt',icon:'💼',desc:'Plataforma XTB'},
+    {name:'Trading 212',url:'https://www.trading212.com/',icon:'📲',desc:'Trading 212'},
+    {name:'DEGIRO',url:'https://www.degiro.pt/',icon:'🏦',desc:'Corretora europeia'},
+    {name:'Interactive Brokers',url:'https://www.interactivebrokers.com/',icon:'🌐',desc:'Corretora global'}
+  ]},
+  {category:'Dividendos',links:[
+    {name:'Dividend.com',url:'https://www.dividend.com/',icon:'💰',desc:'Dados de dividendos US'},
+    {name:'DivvyDiary',url:'https://divvydiary.com/',icon:'📅',desc:'Calendário de dividendos'},
+    {name:'Stock Events',url:'https://stockevents.app/',icon:'📆',desc:'Datas de dividendos e earnings'},
+    {name:'Simply Wall St',url:'https://simplywall.st/',icon:'🧱',desc:'Análise visual de ações'}
+  ]},
+  {category:'Notícias & Aprendizagem',links:[
+    {name:'Investopedia',url:'https://www.investopedia.com/',icon:'📚',desc:'Enciclopédia de investimento'},
+    {name:'Morningstar',url:'https://www.morningstar.com/',icon:'⭐',desc:'Análise e ratings'},
+    {name:'Yahoo Finance',url:'https://finance.yahoo.com/',icon:'📰',desc:'Cotações e notícias'},
+    {name:'ECO Mercados',url:'https://eco.sapo.pt/mercados/',icon:'🇵🇹',desc:'Mercados Portugal'}
+  ]},
+  {category:'Impostos & Regulação (Portugal)',links:[
+    {name:'Portal das Finanças',url:'https://www.portaldasfinancas.gov.pt/',icon:'🏛️',desc:'AT Portugal'},
+    {name:'CMVM',url:'https://www.cmvm.pt/',icon:'⚖️',desc:'Regulador mercados PT'},
+    {name:'Banco de Portugal',url:'https://www.bportugal.pt/',icon:'🏦',desc:'Banco central'}
+  ]}
 ];
 
 const DEFAULT_WATCHLIST_STOCKS=[
@@ -561,6 +648,7 @@ function renderContent(){
   destroyCharts();
   const el=document.getElementById('content');
   switch(activeTab){
+    case 'feed':el.innerHTML=renderFeed();break;
     case 'overview':el.innerHTML=renderOverview();break;
     case 'stocks':el.innerHTML=renderStocks();break;
     case 'etfs':el.innerHTML=renderETFs();break;
@@ -569,8 +657,125 @@ function renderContent(){
     case 'watchlist':el.innerHTML=renderWatchlist();break;
     case 'history':el.innerHTML=renderHistory();break;
     case 'fire':el.innerHTML=renderFIRE();break;
+    case 'links':el.innerHTML=renderLinks();break;
   }
   setTimeout(initCharts,50);
+}
+
+
+// ══════════════════════════════════════════
+// 📰 FEED
+// ══════════════════════════════════════════
+function renderFeed(){
+  var sources=state.feedSources||DEFAULT_FEED_SOURCES;
+  var ytChannels=state.ytChannels||DEFAULT_YT_CHANNELS;
+  var feedFilter=window._feedFilter||'all';
+
+  var sourceCards=sources.filter(function(s){return s.enabled}).map(function(s){
+    return '<a href="'+s.url+'" target="_blank" class="feed-item"><div class="feed-source" style="color:'+s.color+'">'+s.name+'</div><div class="feed-title">Abrir '+s.name+'</div><div class="feed-desc">Clica para ver as últimas notícias de '+s.name+'</div></a>';
+  }).join('');
+
+  var ytCards=ytChannels.filter(function(ch){return ch.enabled}).map(function(ch){
+    return '<a href="'+ch.channelUrl+'" target="_blank" class="yt-card"><div class="yt-thumb" style="background:linear-gradient(135deg,var(--accent),var(--purple))"><div style="font-size:48px;opacity:.5">▶</div></div><div class="yt-info"><div class="yt-channel">'+ch.name+'</div><div class="yt-title">'+ch.desc+'</div></div></a>';
+  }).join('');
+
+  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 style="font-size:18px;font-weight:800">📰 Feed de Notícias & Conteúdo</h2><div style="display:flex;gap:8px"><button class="btn btn-sm" onclick="manageFeedSources()">⚙️ Gerir Fontes</button><button class="btn btn-sm" onclick="manageYTChannels()">📺 Gerir Canais</button></div></div>'+
+    '<div class="card"><div class="card-title">Notícias Financeiras</div><div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">Clica numa fonte para abrir as últimas notícias</div><div class="feed-grid">'+sourceCards+'</div></div>'+
+    '<div class="card"><div class="card-title">📺 YouTubers de Investimento</div><div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">Clica num canal para ver os vídeos mais recentes</div><div class="yt-grid">'+ytCards+'</div></div>';
+}
+
+function manageFeedSources(){
+  var sources=state.feedSources||DEFAULT_FEED_SOURCES;
+  var html=sources.map(function(s,i){
+    return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:8px">'+
+      '<input type="checkbox" id="fs_en_'+i+'" '+(s.enabled?'checked':'')+' style="width:18px;height:18px;cursor:pointer">'+
+      '<input id="fs_name_'+i+'" value="'+s.name+'" style="flex:1;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:12px">'+
+      '<input id="fs_url_'+i+'" value="'+s.url+'" style="flex:2;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:12px">'+
+      '<button class="btn btn-sm btn-danger" onclick="removeFeedSource('+i+')">🗑️</button></div>';
+  }).join('');
+  html+='<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div class="form-grid"><div class="form-row"><label>Nova fonte</label><input id="fs_new_name" placeholder="Nome"></div><div class="form-row"><label>URL</label><input id="fs_new_url" placeholder="https://..."></div></div></div>';
+
+  showModal('Gerir Fontes de Notícias',html,function(){
+    sources.forEach(function(s,i){
+      s.name=document.getElementById('fs_name_'+i).value;
+      s.url=document.getElementById('fs_url_'+i).value;
+      s.enabled=document.getElementById('fs_en_'+i).checked;
+    });
+    var newName=document.getElementById('fs_new_name').value.trim();
+    var newUrl=document.getElementById('fs_new_url').value.trim();
+    if(newName&&newUrl){sources.push({id:'custom_'+Date.now(),name:newName,url:newUrl,color:'var(--accent)',enabled:true})}
+    state.feedSources=sources;
+  });
+}
+
+function removeFeedSource(i){
+  var sources=state.feedSources||[];
+  sources.splice(i,1);
+  state.feedSources=sources;
+  saveData();render();
+}
+
+function manageYTChannels(){
+  var channels=state.ytChannels||DEFAULT_YT_CHANNELS;
+  var html=channels.map(function(ch,i){
+    return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:8px">'+
+      '<input type="checkbox" id="yt_en_'+i+'" '+(ch.enabled?'checked':'')+' style="width:18px;height:18px;cursor:pointer">'+
+      '<input id="yt_name_'+i+'" value="'+ch.name+'" style="flex:1;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:12px">'+
+      '<input id="yt_url_'+i+'" value="'+ch.channelUrl+'" style="flex:2;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:12px">'+
+      '<button class="btn btn-sm btn-danger" onclick="removeYTChannel('+i+')">🗑️</button></div>';
+  }).join('');
+  html+='<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div class="form-grid"><div class="form-row"><label>Novo canal</label><input id="yt_new_name" placeholder="Nome"></div><div class="form-row"><label>URL do canal</label><input id="yt_new_url" placeholder="https://youtube.com/@..."></div></div><div class="form-row"><label>Descrição</label><input id="yt_new_desc" placeholder="Investing, Dividendos..."></div></div>';
+
+  showModal('Gerir Canais YouTube',html,function(){
+    channels.forEach(function(ch,i){
+      ch.name=document.getElementById('yt_name_'+i).value;
+      ch.channelUrl=document.getElementById('yt_url_'+i).value;
+      ch.enabled=document.getElementById('yt_en_'+i).checked;
+    });
+    var newName=document.getElementById('yt_new_name').value.trim();
+    var newUrl=document.getElementById('yt_new_url').value.trim();
+    if(newName&&newUrl){channels.push({id:'yt_'+Date.now(),name:newName,channelUrl:newUrl,desc:document.getElementById('yt_new_desc').value||'',enabled:true})}
+    state.ytChannels=channels;
+  });
+}
+
+function removeYTChannel(i){
+  var channels=state.ytChannels||[];
+  channels.splice(i,1);
+  state.ytChannels=channels;
+  saveData();render();
+}
+
+// ══════════════════════════════════════════
+// 🔗 LINKS ÚTEIS
+// ══════════════════════════════════════════
+function renderLinks(){
+  var allLinks=state.usefulLinks||DEFAULT_USEFUL_LINKS;
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 style="font-size:18px;font-weight:800">🔗 Links Úteis</h2><button class="btn btn-sm btn-primary" onclick="addUsefulLink()">+ Adicionar Link</button></div>';
+
+  allLinks.forEach(function(cat){
+    html+='<div class="link-category"><div class="link-category-title">'+cat.category+'</div><div class="links-grid">';
+    cat.links.forEach(function(link,li){
+      html+='<a href="'+link.url+'" target="_blank" class="link-card"><div class="link-icon" style="background:rgba(59,130,246,.1)">'+link.icon+'</div><div><div class="link-name">'+link.name+'</div><div class="link-desc">'+link.desc+'</div></div></a>';
+    });
+    html+='</div></div>';
+  });
+
+  return html;
+}
+
+function addUsefulLink(){
+  var allLinks=state.usefulLinks||DEFAULT_USEFUL_LINKS;
+  var catOptions=allLinks.map(function(cat){return '<option>'+cat.category+'</option>'}).join('');
+
+  showModal('Adicionar Link Útil','<div class="form-row"><label>Categoria</label><select id="f_cat">'+catOptions+'<option>+ Nova Categoria</option></select></div><div class="form-row" id="f_newcat_row" style="display:none"><label>Nome nova categoria</label><input id="f_newcat"></div><div class="form-row"><label>Nome</label><input id="f_name"></div><div class="form-row"><label>URL</label><input id="f_url" placeholder="https://..."></div><div class="form-row"><label>Emoji/Ícone</label><input id="f_icon" value="🔗" style="width:60px"></div><div class="form-row"><label>Descrição curta</label><input id="f_desc"></div><script>document.getElementById("f_cat").onchange=function(){document.getElementById("f_newcat_row").style.display=this.value.includes("Nova")?"block":"none"}<\/script>',function(){
+    var catName=document.getElementById('f_cat').value;
+    if(catName.includes('Nova')){catName=document.getElementById('f_newcat').value.trim();if(!catName)return;allLinks.push({category:catName,links:[]})}
+    var cat=allLinks.find(function(c){return c.category===catName});
+    if(!cat)return;
+    cat.links.push({name:document.getElementById('f_name').value,url:document.getElementById('f_url').value,icon:document.getElementById('f_icon').value||'🔗',desc:document.getElementById('f_desc').value});
+    state.usefulLinks=allLinks;
+  });
 }
 
 // ══════════════════════════════════════════
