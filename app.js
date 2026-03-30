@@ -2190,6 +2190,171 @@ function addUsefulLink(){
 }
 
 
+
+// ══════════════════════════════════════════
+// 🧠 PORTFOLIO INTELLIGENCE
+// ══════════════════════════════════════════
+function calcPortfolioScore(){
+  var score=50;var reasons=[];
+  var t=calcTotals();
+  if(t.totalCur<=0)return{score:0,reasons:['Portfolio vazio']};
+
+  // Diversification (max 20 pts)
+  var sectors={};
+  state.stocks.forEach(function(s){var sec=s.sector||'Other';if(!sectors[sec])sectors[sec]=0;sectors[sec]+=toEUR(s.volume*s.currentPrice,s.currency)});
+  var sectorCount=Object.keys(sectors).length;
+  var maxConcentration=0;
+  Object.values(sectors).forEach(function(v){var pct=v/t.stocksCur*100;if(pct>maxConcentration)maxConcentration=pct});
+  if(sectorCount>=5){score+=10;reasons.push({good:true,text:'Boa diversificação ('+sectorCount+' setores)'})}
+  else if(sectorCount>=3){score+=5;reasons.push({good:null,text:sectorCount+' setores — podia diversificar mais'})}
+  else{score-=5;reasons.push({good:false,text:'Pouca diversificação ('+sectorCount+' setores)'})}
+  if(maxConcentration>50){score-=10;reasons.push({good:false,text:'Concentração alta: 1 setor com '+maxConcentration.toFixed(0)+'%'})}
+  else if(maxConcentration<30){score+=5;reasons.push({good:true,text:'Sem concentração excessiva'})}
+
+  // Dividend coverage (max 15 pts)
+  var cal=calcDividendCalendar();
+  var weakMonths=cal.filter(function(m){return m.count<=1}).length;
+  var strongMonths=cal.filter(function(m){return m.count>=4}).length;
+  if(weakMonths===0){score+=10;reasons.push({good:true,text:'Todos os meses com dividendos'})}
+  else if(weakMonths<=3){score+=5;reasons.push({good:null,text:weakMonths+' meses fracos em dividendos'})}
+  else{score-=5;reasons.push({good:false,text:weakMonths+' meses fracos — equilibrar calendário'})}
+
+  // Yield quality (max 15 pts)
+  var avgYield=state.stocks.length>0?state.stocks.reduce(function(a,s){return a+s.divYield},0)/state.stocks.length:0;
+  if(avgYield>=4){score+=10;reasons.push({good:true,text:'Yield médio atrativo: '+avgYield.toFixed(1)+'%'})}
+  else if(avgYield>=2.5){score+=5;reasons.push({good:null,text:'Yield médio ok: '+avgYield.toFixed(1)+'%'})}
+  else{reasons.push({good:false,text:'Yield médio baixo: '+avgYield.toFixed(1)+'%'})}
+
+  // P&L (max 10 pts)
+  var plPct=t.totalInv>0?((t.totalCur-t.totalInv)/t.totalInv*100):0;
+  if(plPct>5){score+=10;reasons.push({good:true,text:'Portfolio em lucro: +'+plPct.toFixed(1)+'%'})}
+  else if(plPct>0){score+=5;reasons.push({good:null,text:'Ligeiramente positivo: +'+plPct.toFixed(1)+'%'})}
+  else if(plPct>-5){reasons.push({good:null,text:'Ligeiramente negativo: '+plPct.toFixed(1)+'%'})}
+  else{score-=5;reasons.push({good:false,text:'Portfolio em perda: '+plPct.toFixed(1)+'%'})}
+
+  // ETF coverage
+  if(state.etfs.length>=5){score+=5;reasons.push({good:true,text:state.etfs.length+' ETFs em carteira'})}
+
+  // Number of stocks
+  if(state.stocks.length>=7){score+=5}
+  else if(state.stocks.length<3){score-=5;reasons.push({good:false,text:'Poucas ações ('+state.stocks.length+')'})}
+
+  score=Math.max(0,Math.min(100,score));
+  return{score:score,reasons:reasons};
+}
+
+function generateInsights(){
+  var insights=[];
+  var t=calcTotals();
+  var cal=calcDividendCalendar();
+
+  // Sector concentration
+  var sectors={};
+  state.stocks.forEach(function(s){var sec=s.sector||'Other';if(!sectors[sec])sectors[sec]=0;sectors[sec]+=toEUR(s.volume*s.currentPrice,s.currency)});
+  var topSector=null,topPct=0;
+  Object.entries(sectors).forEach(function(kv){var pct=t.stocksCur>0?(kv[1]/t.stocksCur*100):0;if(pct>topPct){topPct=pct;topSector=kv[0]}});
+  if(topPct>45){
+    insights.push({icon:'⚠️',bg:'rgba(245,158,11,.1)',border:'rgba(245,158,11,.3)',title:'Sobre-exposição a '+topSector,desc:topPct.toFixed(0)+'% do portfolio em '+topSector+'. Considera diversificar para reduzir risco.',action:'Ver alocação',color:'var(--yellow)'});
+  }
+
+  // Weak dividend months
+  var weakMs=cal.filter(function(m){return m.count<=1});
+  if(weakMs.length>0){
+    var names=weakMs.map(function(m){return m.monthFull}).join(', ');
+    insights.push({icon:'📅',bg:'rgba(239,68,68,.1)',border:'rgba(239,68,68,.3)',title:'Meses fracos em dividendos',desc:names+'. Procura ações que paguem nestes meses (ex: AbbVie, Main Street Capital).',action:'Ver calendário',color:'var(--red)'});
+  }
+
+  // Dividend goal progress
+  var goal=state.divGoal||{annual:600};
+  var totalEst=cal.reduce(function(a,b){return a+b.total},0);
+  var goalPct=goal.annual>0?(totalEst/goal.annual*100):0;
+  if(goalPct<50){
+    insights.push({icon:'🎯',bg:'rgba(139,92,246,.1)',border:'rgba(139,92,246,.3)',title:'Meta de dividendos a '+goalPct.toFixed(0)+'%',desc:'Precisas de '+fmt(goal.annual-totalEst)+' mais em dividendos anuais para atingir a meta.',action:'Editar meta',color:'var(--purple)'});
+  }else if(goalPct>=100){
+    insights.push({icon:'🎉',bg:'rgba(16,185,129,.1)',border:'rgba(16,185,129,.3)',title:'Meta de dividendos atingida!',desc:'Parabéns! Dividendos estimados: '+fmt(totalEst)+' vs meta: '+fmt(goal.annual),color:'var(--green)'});
+  }
+
+  // Stocks with high loss
+  state.stocks.forEach(function(s){
+    var plPct=s.buyPrice>0?((s.currentPrice-s.buyPrice)/s.buyPrice*100):0;
+    if(plPct<-15){
+      insights.push({icon:'📉',bg:'rgba(239,68,68,.1)',border:'rgba(239,68,68,.3)',title:s.ticker+' em queda de '+plPct.toFixed(1)+'%',desc:'Considera se vale manter ou se o dividendo compensa a perda. Yield: '+s.divYield+'%',action:'Analisar '+s.ticker,color:'var(--red)'});
+    }
+  });
+
+  // Unused capital opportunity
+  var unused=state.unusedCapital||0;
+  if(unused>100){
+    insights.push({icon:'💰',bg:'rgba(59,130,246,.1)',border:'rgba(59,130,246,.3)',title:fmt(unused)+' de capital parado',desc:'Tens capital não investido. Verifica o calendário para oportunidades de compra este mês.',color:'var(--accent)'});
+  }
+
+  // Backup reminder
+  var lastBackup=localStorage.getItem('last_backup_date');
+  if(lastBackup){
+    var days=(Date.now()-parseInt(lastBackup))/(1000*60*60*24);
+    if(days>14){
+      insights.push({icon:'💾',bg:'rgba(245,158,11,.1)',border:'rgba(245,158,11,.3)',title:'Backup há '+Math.floor(days)+' dias',desc:'Exporta um backup JSON para não perderes dados.',color:'var(--yellow)'});
+    }
+  }
+
+  return insights;
+}
+
+function generateNextMove(){
+  var cal=calcDividendCalendar();
+  var curMonth=new Date().getMonth();
+  var t=calcTotals();
+  var moves=[];
+
+  // Check which months are weak next
+  for(var i=1;i<=3;i++){
+    var m=(curMonth+i)%12;
+    if(cal[m].count<=2){
+      moves.push('Mês de '+cal[m].monthFull+' é fraco em dividendos ('+cal[m].count+' ações). Procura ações que paguem nesse mês.');
+      break;
+    }
+  }
+
+  // Check diversification
+  var sectors={};
+  state.stocks.forEach(function(s){sectors[s.sector||'Other']=(sectors[s.sector||'Other']||0)+1});
+  if(Object.keys(sectors).length<4)moves.push('Diversifica: tens poucos setores. Considera Healthcare (JNJ, ABBV) ou Consumer (KO, PEP).');
+
+  // Check if should rebalance ETFs
+  state.etfs.forEach(function(e){
+    var plan=getPlan(e.planId);
+    var pl=((e.current-e.invested)/e.invested*100);
+    if(pl<-10)moves.push('ETF '+e.ticker+' em queda de '+pl.toFixed(0)+'%. Oportunidade de reforço?');
+  });
+
+  // Default
+  if(moves.length===0)moves.push('Portfolio equilibrado. Continua a contribuir regularmente e faz snapshot mensal.');
+
+  return moves;
+}
+
+function calcPortfolioBreakdown(){
+  var t=calcTotals();
+  var sectors={},regions={},assets={};
+
+  // Sector breakdown
+  state.stocks.forEach(function(s){
+    var sec=s.sector||'Other';
+    if(!sectors[sec])sectors[sec]={value:0,tickers:[]};
+    sectors[sec].value+=toEUR(s.volume*s.currentPrice,s.currency);
+    sectors[sec].tickers.push(s.ticker);
+  });
+
+  // Asset type breakdown
+  assets['Ações']={value:t.stocksCur,color:'var(--accent)'};
+  assets['ETFs']={value:t.etfsCur,color:'var(--green)'};
+  var unused=state.unusedCapital||0;
+  if(unused>0)assets['Liquidez']={value:unused,color:'var(--yellow)'};
+
+  return{sectors:sectors,assets:assets,total:t.totalCur+unused};
+}
+
+
 function renderDivGoal(){
   var goal=state.divGoal||{monthly:50,annual:600};
   var cal=calcDividendCalendar();
@@ -2218,56 +2383,121 @@ function editDivGoal(){
 // OVERVIEW
 // ══════════════════════════════════════════
 function renderOverview(){
-  const t=calcTotals();
-  const pl=t.totalCur-t.totalInv;
-  const plPct=t.totalInv>0?(pl/t.totalInv*100):0;
-  const cal=calcDividendCalendar();
-  const totalDiv=cal.reduce((a,b)=>a+b.total,0);
-  const avgDiv=totalDiv/12;
-  const maxDiv=Math.max(...cal.map(d=>d.total));
-  const minDiv=Math.min(...cal.map(d=>d.total));
-  const variance=maxDiv>0?((maxDiv-minDiv)/maxDiv*100):0;
+  var t=calcTotals();
+  var pl=t.totalCur-t.totalInv;
+  var plPct=t.totalInv>0?(pl/t.totalInv*100):0;
+  var cal=calcDividendCalendar();
+  var totalDiv=cal.reduce(function(a,b){return a+b.total},0);
+  var avgDiv=totalDiv/12;
+  var maxDiv=Math.max.apply(null,cal.map(function(d){return d.total}));
+  var minDiv=Math.min.apply(null,cal.map(function(d){return d.total}));
+  var variance=maxDiv>0?((maxDiv-minDiv)/maxDiv*100):0;
+  var scoreData=calcPortfolioScore();
+  var insights=generateInsights();
+  var nextMoves=generateNextMove();
+  var breakdown=calcPortfolioBreakdown();
+  var unused=state.unusedCapital||0;
+  var interestRate=state.interestRate||3.8;
+  var monthlyInterest=unused*(interestRate/100)/12;
 
-  return `
-    <div class="grid4">
-      <div class="stat-card"><div class="glow" style="background:var(--accent)"></div><div class="stat-label">Valor Total</div><div class="stat-value">${fmt(t.totalCur)}</div><div class="stat-sub" style="color:var(--accent)">Investido: ${fmt(t.totalInv)}</div></div>
-      <div class="stat-card"><div class="glow" style="background:${pl>=0?'var(--green)':'var(--red)'}"></div><div class="stat-label">Lucro / Perda</div><div class="stat-value" style="color:${pl>=0?'var(--green)':'var(--red)'}">${fmt(pl)}</div><div class="stat-sub" style="color:${pl>=0?'var(--green)':'var(--red)'}">${plPct>=0?'+':''}${plPct.toFixed(2)}%</div></div>
-      <div class="stat-card"><div class="glow" style="background:var(--yellow)"></div><div class="stat-label">Dividendos/Ano (est.)</div><div class="stat-value">${fmt(totalDiv)}</div><div class="stat-sub" style="color:var(--yellow)">Média: ${fmt(avgDiv)}/mês</div></div>
-      <div class="stat-card"><div class="glow" style="background:var(--purple)"></div><div class="stat-label">Variância Mensal</div><div class="stat-value">${variance.toFixed(1)}%</div><div class="stat-sub" style="color:var(--purple)">Min: ${fmt(minDiv)} | Max: ${fmt(maxDiv)}</div></div>
-    </div>
-    ${renderDivGoal()}
-    <div class="capital-bar">
-      <div class="capital-item">💰 Capital não investido: <strong>${fmt(state.unusedCapital||0)}</strong></div>
-      <div class="capital-item">📈 Taxa juro: <strong>${state.interestRate||3.8}%</strong></div>
-      <div class="capital-item">💵 Juro mensal est.: <strong style="color:var(--green)">${fmt((state.unusedCapital||0)*(state.interestRate||3.8)/100/12)}</strong></div>
-      <button class="btn btn-sm" onclick="editUnusedCapital()">✏️ Editar</button>
-    </div>
-    <div class="card">
-      <div class="card-title">Dividendos Esperados por Mês — ${selectedYear}</div>
-      <div class="chart-wrap"><canvas id="chartDivMonth" height="300"></canvas></div>
-      <div class="chart-stats">
-        <div class="chart-stat"><div class="chart-stat-label">Média</div><div class="chart-stat-value" style="color:var(--accent)">${fmt(avgDiv)}</div></div>
-        <div class="chart-stat"><div class="chart-stat-label">Máximo</div><div class="chart-stat-value" style="color:var(--green)">${fmt(maxDiv)}</div></div>
-        <div class="chart-stat"><div class="chart-stat-label">Mínimo</div><div class="chart-stat-value" style="color:var(--red)">${fmt(minDiv)}</div></div>
-        <div class="chart-stat"><div class="chart-stat-label">Variância</div><div class="chart-stat-value" style="color:${variance>50?'var(--red)':'var(--green)'}">${variance.toFixed(1)}%</div></div>
-      </div>
-    </div>
-    <div class="grid2">
-      <div class="card"><div class="card-title">Alocação — Ações por Setor</div><div class="chart-wrap"><canvas id="chartStockAlloc" height="260"></canvas></div></div>
-      <div class="card"><div class="card-title">Alocação — ETFs por Plano</div><div class="chart-wrap"><canvas id="chartETFAlloc" height="260"></canvas></div></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Performance das Ações vs Dividend Yield</div>
-      <div class="chart-wrap"><canvas id="chartPerformance" height="220"></canvas></div>
-    </div>
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <div class="card-title" style="margin:0">Evolução do Portfolio</div>
-        <div style="font-size:11px;color:var(--text-dim)">Tira snapshots mensais no Histórico</div>
-      </div>
-      <div class="chart-wrap"><canvas id="chartPortfolioHistory" height="220"></canvas></div>
-    </div>`;
+  // Score ring color
+  var scoreColor=scoreData.score>=75?'var(--green)':scoreData.score>=50?'var(--yellow)':'var(--red)';
+  var scoreLabel=scoreData.score>=80?'Excelente':scoreData.score>=65?'Bom':scoreData.score>=50?'Razoável':scoreData.score>=35?'A melhorar':'Fraco';
+  var circumference=2*Math.PI*50;
+  var dashOffset=circumference-(scoreData.score/100)*circumference;
+
+  // Hero section
+  var html='<div class="hero-section"><div class="hero-row"><div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:2px;font-weight:600;margin-bottom:8px">Valor Total do Portfolio</div><div class="hero-value">'+fmt(t.totalCur)+'</div><div class="hero-change" style="color:'+(pl>=0?'var(--green)':'var(--red)')+'">'+(pl>=0?'▲ +':'▼ ')+fmt(Math.abs(pl))+' ('+(pl>=0?'+':'')+plPct.toFixed(2)+'%)</div><div class="hero-sub">Investido: '+fmt(t.totalInv)+' · Ações: '+fmt(t.stocksCur)+' · ETFs: '+fmt(t.etfsCur)+'</div></div>';
+  // Score ring
+  html+='<div style="text-align:center"><div class="score-ring"><svg width="120" height="120" viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" stroke="#1e293b" stroke-width="8" fill="none"/><circle cx="60" cy="60" r="50" stroke="'+scoreColor+'" stroke-width="8" fill="none" stroke-linecap="round" stroke-dasharray="'+circumference+'" stroke-dashoffset="'+dashOffset+'" style="transition:stroke-dashoffset 1s ease"/></svg><div class="score-ring-value" style="color:'+scoreColor+'">'+scoreData.score+'<span class="score-ring-label">'+scoreLabel+'</span></div></div></div></div></div>';
+
+  // KPI row
+  html+='<div class="kpi-grid">';
+  html+='<div class="kpi"><div class="kpi-icon">💰</div><div class="kpi-label">Dividendos/Ano</div><div class="kpi-value" style="color:var(--green)">'+fmt(totalDiv)+'</div><div class="kpi-sub" style="color:var(--text-muted)">'+fmt(avgDiv)+'/mês</div></div>';
+  html+='<div class="kpi"><div class="kpi-icon">📊</div><div class="kpi-label">Variância Mensal</div><div class="kpi-value" style="color:'+(variance>50?'var(--red)':'var(--green)')+'">'+variance.toFixed(1)+'%</div><div class="kpi-sub" style="color:var(--text-muted)">Min: '+fmt(minDiv)+' · Max: '+fmt(maxDiv)+'</div></div>';
+  html+='<div class="kpi"><div class="kpi-icon">🏦</div><div class="kpi-label">Capital Livre</div><div class="kpi-value">'+fmt(unused)+'</div><div class="kpi-sub" style="color:var(--green)">Juro: '+fmt(monthlyInterest)+'/mês ('+interestRate+'%)</div></div>';
+  html+='<div class="kpi"><div class="kpi-icon">📈</div><div class="kpi-label">Nº Posições</div><div class="kpi-value">'+state.stocks.length+' / '+state.etfs.length+'</div><div class="kpi-sub" style="color:var(--text-muted)">Ações / ETFs</div></div>';
+  html+='</div>';
+
+  // Div goal
+  html+=renderDivGoal();
+
+  // Capital edit button
+  html+='<div style="display:flex;gap:8px;margin-bottom:20px"><button class="btn btn-sm" onclick="editUnusedCapital()">✏️ Capital livre</button><button class="btn btn-sm" onclick="editDivGoal()">🎯 Meta dividendos</button></div>';
+
+  // Next Move
+  if(nextMoves.length>0){
+    html+='<div class="next-move"><div class="next-move-title">🧠 Próximo Passo Sugerido</div>';
+    nextMoves.forEach(function(m){html+='<div style="font-size:13px;color:var(--text);margin-bottom:6px;padding-left:12px;border-left:3px solid var(--accent)">'+m+'</div>'});
+    html+='</div>';
+  }
+
+  // Insights
+  if(insights.length>0){
+    html+='<div class="card"><div class="card-title">💡 Insights & Alertas</div><div class="insights-list">';
+    insights.forEach(function(ins){
+      html+='<div class="insight-item"><div class="insight-icon" style="background:'+ins.bg+'">'+ins.icon+'</div><div><div class="insight-title">'+ins.title+'</div><div class="insight-desc">'+ins.desc+'</div></div></div>';
+    });
+    html+='</div></div>';
+  }
+
+  // Portfolio breakdown bar
+  html+='<div class="card"><div class="card-title">📦 Composição do Portfolio</div>';
+  // Asset type bar
+  var totalAll=breakdown.total||1;
+  html+='<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Por tipo de ativo</div><div class="breakdown-bar">';
+  Object.entries(breakdown.assets).forEach(function(kv){
+    var pct=(kv[1].value/totalAll*100);
+    if(pct>0)html+='<div class="breakdown-segment" style="width:'+pct+'%;background:'+kv[1].color+'" title="'+kv[0]+': '+pct.toFixed(1)+'%"></div>';
+  });
+  html+='</div><div class="breakdown-legend">';
+  Object.entries(breakdown.assets).forEach(function(kv){
+    html+='<div class="breakdown-legend-item"><div class="breakdown-legend-dot" style="background:'+kv[1].color+'"></div>'+kv[0]+': '+fmt(kv[1].value)+' ('+(kv[1].value/totalAll*100).toFixed(1)+'%)</div>';
+  });
+  html+='</div>';
+
+  // Sector bar
+  var sectorColors=['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#f97316','#84cc16','#14b8a6'];
+  var sectorEntries=Object.entries(breakdown.sectors).sort(function(a,b){return b[1].value-a[1].value});
+  if(sectorEntries.length>0){
+    html+='<div style="font-size:11px;color:var(--text-muted);margin:16px 0 6px">Por setor</div><div class="breakdown-bar">';
+    sectorEntries.forEach(function(kv,i){
+      var pct=(kv[1].value/t.stocksCur*100);
+      if(pct>0)html+='<div class="breakdown-segment" style="width:'+pct+'%;background:'+sectorColors[i%sectorColors.length]+'" title="'+kv[0]+': '+pct.toFixed(1)+'%"></div>';
+    });
+    html+='</div><div class="breakdown-legend">';
+    sectorEntries.forEach(function(kv,i){
+      html+='<div class="breakdown-legend-item"><div class="breakdown-legend-dot" style="background:'+sectorColors[i%sectorColors.length]+'"></div>'+kv[0]+' ('+kv[1].tickers.join(', ')+'): '+(kv[1].value/t.stocksCur*100).toFixed(1)+'%</div>';
+    });
+    html+='</div>';
+  }
+  html+='</div>';
+
+  // Score breakdown
+  html+='<div class="card"><div class="card-title">📋 Portfolio Score — Detalhe</div><div class="insights-list">';
+  scoreData.reasons.forEach(function(r){
+    var icon=r.good===true?'✅':r.good===false?'❌':'🟡';
+    var bg=r.good===true?'rgba(16,185,129,.1)':r.good===false?'rgba(239,68,68,.1)':'rgba(245,158,11,.1)';
+    html+='<div class="insight-item" style="padding:10px"><div class="insight-icon" style="background:'+bg+';width:30px;height:30px;font-size:14px">'+icon+'</div><div style="font-size:12px">'+r.text+'</div></div>';
+  });
+  html+='</div></div>';
+
+  // Charts
+  html+='<div class="card"><div class="card-title">Dividendos Esperados por Mês — '+selectedYear+'</div><div class="chart-wrap"><canvas id="chartDivMonth" height="280"></canvas></div>';
+  html+='<div class="chart-stats"><div class="chart-stat"><div class="chart-stat-label">Média</div><div class="chart-stat-value" style="color:var(--accent)">'+fmt(avgDiv)+'</div></div><div class="chart-stat"><div class="chart-stat-label">Máximo</div><div class="chart-stat-value" style="color:var(--green)">'+fmt(maxDiv)+'</div></div><div class="chart-stat"><div class="chart-stat-label">Mínimo</div><div class="chart-stat-value" style="color:var(--red)">'+fmt(minDiv)+'</div></div></div></div>';
+
+  html+='<div class="grid2">';
+  html+='<div class="card"><div class="card-title">Alocação — Ações por Setor</div><div class="chart-wrap"><canvas id="chartStockAlloc" height="260"></canvas></div></div>';
+  html+='<div class="card"><div class="card-title">Alocação — ETFs por Plano</div><div class="chart-wrap"><canvas id="chartETFAlloc" height="260"></canvas></div></div>';
+  html+='</div>';
+
+  html+='<div class="card"><div class="card-title">Performance das Ações vs Dividend Yield</div><div class="chart-wrap"><canvas id="chartPerformance" height="220"></canvas></div></div>';
+
+  html+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><div class="card-title" style="margin:0">Evolução do Portfolio</div><div style="font-size:11px;color:var(--text-dim)">Tira snapshots mensais no Histórico</div></div><div class="chart-wrap"><canvas id="chartPortfolioHistory" height="220"></canvas></div></div>';
+
+  return html;
 }
+
 
 function editUnusedCapital(){
   var uc=state.unusedCapital||0;
