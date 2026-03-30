@@ -1,37 +1,47 @@
 // ══════════════════════════════════════════
-// CONSTANTS
+// PORTFOLIO TRACKER - ES6 Module Entry Point
 // ══════════════════════════════════════════
-const MONTHS=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-const MONTHS_FULL=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-const PLAN_COLOR_OPTIONS=["#10b981","#3b82f6","#f97316","#8b5cf6","#f59e0b","#ec4899","#06b6d4","#ef4444","#84cc16","#14b8a6","#f43f5e","#a855f7"];
-const SECTOR_COLORS={"Technology":"#3b82f6","Healthcare":"#10b981","Financial":"#f59e0b","Energy":"#ef4444","Consumer":"#8b5cf6","Utilities":"#06b6d4","REIT":"#ec4899","Tobacco":"#f97316","Industrial":"#84cc16","Telecom":"#14b8a6","Other":"#64748b"};
-const TABS=[
-  {id:"feed",label:"📰 Feed"},
-  {id:"overview",label:"📊 Resumo"},
-  {id:"stocks",label:"📈 Ações"},
-  {id:"etfs",label:"🏦 ETFs"},
-  {id:"dividends",label:"💰 Dividendos"},
-  {id:"calendar",label:"📅 Calendário"},
-  {id:"watchlist",label:"👀 Watchlist"},
-  {id:"history",label:"📋 Histórico"},
-  {id:"fire",label:"🔥 FIRE"},
-  {id:"analyzer",label:"🔬 Ações"},
-  {id:"etfanalyzer",label:"🔬 ETFs"},
-  {id:"correlation",label:"📐 Correlação"},
-  {id:"comparador",label:"⚖️ Comparador"},
-  {id:"links",label:"🔗 Links Úteis"}
-];
+import { MONTHS, MONTHS_FULL, PLAN_COLOR_OPTIONS, SECTOR_COLORS, TABS,
+  DEFAULT_FEED_SOURCES, DEFAULT_YT_CHANNELS, DEFAULT_STOCKS, DEFAULT_ETFS,
+  DEFAULT_PLANS, DEFAULT_WATCHLIST_STOCKS, DEFAULT_USEFUL_LINKS } from './js/config.js';
+import { sanitizeHTML, sanitizeURL, toEUR as _toEUR, fmt } from './js/helpers.js';
+import { robustYahooFetch, fetchStockPrice, fetchTickerData } from './js/providers/market.js';
+import { calcMA, calcRSI, calcMACD, calcEMA, calcATR,
+  getTickerNotes as _getTickerNotes, calcSignals as _calcSignals,
+  interpretStock } from './js/analytics/indicators.js';
 
-// ══════════════════════════════════════════
-// STATE
-// ══════════════════════════════════════════
+// Wrap imported functions to inject local state
+function toEUR(value, currency) { return _toEUR(value, currency, fxRate); }
+function getTickerNotes(ticker) { return _getTickerNotes(state.tickerNotes || {}, ticker); }
+function calcSignals(ticker, closes, highs, lows) { return _calcSignals(ticker, closes, highs, lows, state.stocks); }
+
+
+// State (module-scoped)
 let allAccounts={};
 let currentAccountId="";
 let state={};
 let selectedYear=new Date().getFullYear();
 let activeTab="feed";
 let charts={};
-let fxRate=0.92; // EUR/USD default
+let fxRate=0.92;
+
+async function fetchFxRate(){
+  try{
+    const r=await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+    const d=await r.json();
+    fxRate=d.rates.EUR||0.92;
+    localStorage.setItem('cached_fx_rate',JSON.stringify({rate:fxRate,time:Date.now()}));
+    document.getElementById('fxRate').textContent='1 USD = '+fxRate.toFixed(4)+' EUR';
+    return fxRate;
+  }catch(e){
+    console.warn('FX fetch failed, trying cache',e);
+    var cached=localStorage.getItem('cached_fx_rate');
+    if(cached){try{var c=JSON.parse(cached);fxRate=c.rate||0.92}catch(x){}}
+    document.getElementById('fxRate').textContent='1 USD = '+fxRate.toFixed(4)+' EUR (cache)';
+    return fxRate;
+  }
+}
+
 
 // ══════════════════════════════════════════
 // ACCOUNT MANAGEMENT
@@ -156,283 +166,8 @@ const DEFAULT_ETFS=[
   {planId:"plano_inicial",name:"iShares $ Treasury Bond 3-7yr UCITS",ticker:"IUSM",type:"ACC",invested:36.62,current:36.50,isin:"IE00B3VWN518"}
 ];
 
-const DEFAULT_FEED_SOURCES=[
-  {id:'reuters',name:'Reuters Business',rss:'https://www.reutersagency.com/feed/?best-topics=business-finance',url:'https://www.reuters.com/business/',color:'#ff8c00',enabled:true},
-  {id:'cnbc',name:'CNBC',rss:'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114',url:'https://www.cnbc.com/world/',color:'#006daa',enabled:true},
-  {id:'investing',name:'Investing.com',rss:'https://www.investing.com/rss/news.rss',url:'https://www.investing.com/news/',color:'#2962ff',enabled:true},
-  {id:'marketwatch',name:'MarketWatch',rss:'https://feeds.marketwatch.com/marketwatch/topstories/',url:'https://www.marketwatch.com/',color:'#00ac4e',enabled:true},
-  {id:'eco',name:'ECO (Portugal)',rss:'https://eco.sapo.pt/feed/',url:'https://eco.sapo.pt/mercados/',color:'#00a651',enabled:true},
-  {id:'jnegocios',name:'Jornal de Negócios',rss:'https://www.jornaldenegocios.pt/rss',url:'https://www.jornaldenegocios.pt/',color:'#c8102e',enabled:true},
-  {id:'seekalpha',name:'Seeking Alpha',rss:'https://seekingalpha.com/market_currents.xml',url:'https://seekingalpha.com/',color:'#f7971e',enabled:true},
-  {id:'yahoo',name:'Yahoo Finance',rss:'https://finance.yahoo.com/news/rssindex',url:'https://finance.yahoo.com/',color:'#7b0099',enabled:true}
-];
 
-const DEFAULT_YT_CHANNELS=[
-  {id:'yt1',name:'Daniel Menino',channelId:'UCxKVg9fRMnGFGAhBrPHQxYQ',channelUrl:'https://www.youtube.com/@odanielmenino',desc:'Investimentos PT',enabled:true},
-  {id:'yt2',name:'Tiago Ramos',channelId:'UC2iRmfRFN0In_aGKNv7DFKQ',channelUrl:'https://www.youtube.com/@TiagoRamosInvest',desc:'Investimentos PT',enabled:true},
-  {id:'yt3',name:'Dividend Bull',channelId:'UCsxJh2duQOBihNxOMpfgVOA',channelUrl:'https://www.youtube.com/@DividendBull',desc:'Dividendos',enabled:true},
-  {id:'yt4',name:'Joseph Carlson',channelId:'UCbta1dGapXS7TyFXQjELklg',channelUrl:'https://www.youtube.com/@JosephCarlsonShow',desc:'Dividend investing',enabled:true},
-  {id:'yt5',name:'Andrei Jikh',channelId:'UCGy7SkBjcIAgTiwkXEtPnYg',channelUrl:'https://www.youtube.com/@AndreiJikh',desc:'Investing & Finance',enabled:true},
-  {id:'yt6',name:'The Plain Bagel',channelId:'UCFCEuCsyWP0YkP3CZ3Mr01Q',channelUrl:'https://www.youtube.com/@ThePlainBagel',desc:'Finance education',enabled:true}
-];
-
-const DEFAULT_USEFUL_LINKS=[
-  {category:'Ferramentas',links:[
-    {name:'justETF Screener',url:'https://www.justetf.com/en/etf-screener.html',icon:'📊',desc:'Pesquisa e filtra ETFs'},
-    {name:'Getquin',url:'https://www.getquin.com/',icon:'📱',desc:'Portfolio tracker social'},
-    {name:'WalletBurst FIRE Calc',url:'https://walletburst.com/tools/coast-fire-calc/',icon:'🔥',desc:'Calculadora Coast FIRE'},
-    {name:'Portfolio Visualizer',url:'https://www.portfoliovisualizer.com/',icon:'📈',desc:'Backtest e análise de portfolios'},
-    {name:'TradingView',url:'https://www.tradingview.com/',icon:'📉',desc:'Gráficos e análise técnica'}
-  ]},
-  {category:'Corretoras',links:[
-    {name:'XTB xStation',url:'https://xstation5.xtb.com/?branch=pt',icon:'💼',desc:'Plataforma XTB'},
-    {name:'Trading 212',url:'https://www.trading212.com/',icon:'📲',desc:'Trading 212'},
-    {name:'DEGIRO',url:'https://www.degiro.pt/',icon:'🏦',desc:'Corretora europeia'},
-    {name:'Interactive Brokers',url:'https://www.interactivebrokers.com/',icon:'🌐',desc:'Corretora global'}
-  ]},
-  {category:'Dividendos',links:[
-    {name:'Dividend.com',url:'https://www.dividend.com/',icon:'💰',desc:'Dados de dividendos US'},
-    {name:'DivvyDiary',url:'https://divvydiary.com/',icon:'📅',desc:'Calendário de dividendos'},
-    {name:'Stock Events',url:'https://stockevents.app/',icon:'📆',desc:'Datas de dividendos e earnings'},
-    {name:'Simply Wall St',url:'https://simplywall.st/',icon:'🧱',desc:'Análise visual de ações'}
-  ]},
-  {category:'Notícias & Aprendizagem',links:[
-    {name:'Investopedia',url:'https://www.investopedia.com/',icon:'📚',desc:'Enciclopédia de investimento'},
-    {name:'Morningstar',url:'https://www.morningstar.com/',icon:'⭐',desc:'Análise e ratings'},
-    {name:'Yahoo Finance',url:'https://finance.yahoo.com/',icon:'📰',desc:'Cotações e notícias'},
-    {name:'ECO Mercados',url:'https://eco.sapo.pt/mercados/',icon:'🇵🇹',desc:'Mercados Portugal'}
-  ]},
-  {category:'Impostos & Regulação (Portugal)',links:[
-    {name:'Portal das Finanças',url:'https://www.portaldasfinancas.gov.pt/',icon:'🏛️',desc:'AT Portugal'},
-    {name:'CMVM',url:'https://www.cmvm.pt/',icon:'⚖️',desc:'Regulador mercados PT'},
-    {name:'Banco de Portugal',url:'https://www.bportugal.pt/',icon:'🏦',desc:'Banco central'}
-  ]}
-];
-
-const DEFAULT_WATCHLIST_STOCKS=[
-  {ticker:"ABBV",name:"AbbVie",sector:"Healthcare",divYield:3.85,freq:"Trimestral",months:"Fev/Mai/Ago/Nov",interest:"SIM",notes:"Cobre meses fracos"},
-  {ticker:"MAIN",name:"Main Street Capital",sector:"Financial",divYield:7.01,freq:"Mensal",months:"Todos",interest:"SIM",notes:"BDC mensal"},
-  {ticker:"PM",name:"Philip Morris",sector:"Tobacco",divYield:5.97,freq:"Trimestral",months:"Jan/Abr/Jul/Out",interest:"SIM",notes:"Tabaco global"},
-  {ticker:"KO",name:"Coca-Cola",sector:"Consumer",divYield:3.12,freq:"Trimestral",months:"Abr/Jul/Out/Dez",interest:"TALVEZ",notes:"Dividend King"},
-  {ticker:"T",name:"AT&T",sector:"Telecom",divYield:7.12,freq:"Trimestral",months:"Fev/Mai/Ago/Nov",interest:"ANALISAR",notes:"Alto yield, risco"},
-  {ticker:"JNJ",name:"Johnson & Johnson",sector:"Healthcare",divYield:2.93,freq:"Trimestral",months:"Mar/Jun/Set/Dez",interest:"TALVEZ",notes:"Dividend King"},
-  {ticker:"PEP",name:"PepsiCo",sector:"Consumer",divYield:2.63,freq:"Trimestral",months:"Jan/Mar/Jun/Set",interest:"TALVEZ",notes:"Dividend King"},
-  {ticker:"CVX",name:"Chevron",sector:"Energy",divYield:3.49,freq:"Trimestral",months:"Mar/Jun/Set/Dez",interest:"TALVEZ",notes:"Energia"}
-];
-
-
-// ══════════════════════════════════════════
-// FX & PRICE API
-// ══════════════════════════════════════════
-
-async function fetchTickerData(ticker){
-  try{
-    var d=await robustYahooFetch(ticker,'5d','1d');
-    if(!d)return null;
-    var meta=d.chart?.result?.[0]?.meta;
-    if(!meta)return null;
-    return{price:meta.regularMarketPrice,currency:meta.currency||'USD',name:meta.shortName||meta.longName||'',exchange:meta.exchangeName||''};
-  }catch(e){return null}
-}
-
-async function autoFillTicker(inputId,nameId,priceId,currencyId){
-  const ticker=document.getElementById(inputId).value.trim().toUpperCase();
-  if(!ticker)return;
-  const data=await fetchTickerData(ticker);
-  if(data){
-    if(nameId&&data.name){var el=document.getElementById(nameId);if(el)el.value=data.name}
-    if(priceId&&data.price){var el=document.getElementById(priceId);if(el)el.value=data.price}
-    if(currencyId&&data.currency){var el=document.getElementById(currencyId);if(el){for(var o of el.options){if(o.value===data.currency)o.selected=true}}}
-    showToast('Dados de '+ticker+' carregados!');
-  }else{showToast('Não encontrei '+ticker,'error')}
-}
-
-async function fetchFxRate(){
-  try{
-    const r=await fetch('https://api.exchangerate-api.com/v4/latest/USD');
-    const d=await r.json();
-    fxRate=d.rates.EUR||0.92;
-    localStorage.setItem('cached_fx_rate',JSON.stringify({rate:fxRate,time:Date.now()}));
-    document.getElementById('fxRate').textContent='1 USD = '+fxRate.toFixed(4)+' EUR';
-    return fxRate;
-  }catch(e){
-    console.warn('FX fetch failed, trying cache',e);
-    var cached=localStorage.getItem('cached_fx_rate');
-    if(cached){try{var c=JSON.parse(cached);fxRate=c.rate||0.92}catch(x){}}
-    document.getElementById('fxRate').textContent='1 USD = '+fxRate.toFixed(4)+' EUR (cache)';
-    return fxRate;
-  }
-}
-
-async function fetchStockPrice(ticker){
-  try{
-    var d=await robustYahooFetch(ticker,'1d','1d');
-    if(d){
-      var meta=d.chart?.result?.[0]?.meta;
-      if(meta&&meta.regularMarketPrice){
-        return{price:meta.regularMarketPrice,currency:meta.currency||'USD'};
-      }
-    }
-  }catch(e){}
-  // Fallback: try cached price
-  try{var cached=JSON.parse(localStorage.getItem('cached_prices')||'{}');if(cached.prices&&cached.prices[ticker]){var cp=cached.prices[ticker];if(typeof cp==='object')return{price:cp.price,currency:cp.currency||'USD',cached:true};return{price:cp,currency:'USD',cached:true}}}catch(e){}
-  return null;
-}
-
-async function refreshPrices(){
-  const btn=document.getElementById('btnRefresh');
-  const status=document.getElementById('updateStatus');
-  btn.disabled=true;
-  btn.textContent='⏳ A atualizar...';
-  status.className='update-indicator loading';
-  status.innerHTML='<span class="spinner"></span> A buscar preços...';
-
-  await fetchFxRate();
-
-  let updated=0,failed=0;
-  const allTickers=[...state.stocks.map(s=>({ticker:s.ticker,type:'stock'}))];
-
-  for(const item of allTickers){
-    try{
-      const result=await fetchStockPrice(item.ticker);
-      if(result){
-        const stock=state.stocks.find(s=>s.ticker===item.ticker);
-        if(stock){stock.currentPrice=result.price;updated++}
-      }else{failed++}
-    }catch(e){failed++}
-    // Small delay to avoid rate limiting
-    await new Promise(r=>setTimeout(r,300));
-  }
-
-  // Cache last valid prices with currency and timestamp
-  var priceCache={};
-  state.stocks.forEach(function(s){priceCache[s.ticker]={price:s.currentPrice,currency:s.currency,time:Date.now()}});
-  localStorage.setItem('cached_prices',JSON.stringify({prices:priceCache,time:Date.now()}));
-  state.lastPriceUpdate=new Date().toISOString();
-  saveData();
-  render();
-
-  btn.disabled=false;
-  btn.textContent='🔄 Atualizar Preços';
-  if(failed===0){
-    status.className='update-indicator success';
-    status.textContent='✅ '+updated+' preços atualizados';
-    showToast(updated+' preços atualizados!');
-  }else{
-    status.className='update-indicator error';
-    status.textContent='⚠️ '+updated+' ok, '+failed+' falharam';
-    showToast(updated+' ok, '+failed+' falharam — atualiza manualmente','error');
-  }
-}
-
-// Auto-refresh check (every 24h)
-function checkAutoRefresh(){
-  if(!state.lastPriceUpdate)return;
-  const last=new Date(state.lastPriceUpdate);
-  const now=new Date();
-  const hours=(now-last)/(1000*60*60);
-  if(hours>=24){
-    console.log('Auto-refreshing prices (>24h since last update)');
-    refreshPrices();
-  }
-}
-
-// ══════════════════════════════════════════
-// HELPERS
-// ══════════════════════════════════════════
-function toEUR(value,currency){
-  if(currency==='EUR')return value;
-  return value*fxRate;
-}
-
-function fmt(v){return new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'}).format(v)}
-
-function calcDividendCalendar(){
-  return MONTHS.map((name,idx)=>{
-    const monthNum=idx+1;let total=0;const details=[];
-    state.stocks.forEach(s=>{
-      if(s.months&&s.months.includes(monthNum)){
-        const amt=toEUR(s.volume*s.divPerShare,s.currency);
-        total+=amt;
-        details.push({ticker:s.ticker,name:s.name,amount:amt});
-      }
-    });
-    return{month:name,monthFull:MONTHS_FULL[idx],monthNum,total,details,count:details.length};
-  });
-}
-
-function calcTotals(){
-  const si=state.stocks.reduce((a,s)=>a+toEUR(s.volume*s.buyPrice,s.currency),0);
-  const sc=state.stocks.reduce((a,s)=>a+toEUR(s.volume*s.currentPrice,s.currency),0);
-  const ei=state.etfs.reduce((a,e)=>a+e.invested,0);
-  const ec=state.etfs.reduce((a,e)=>a+e.current,0);
-  return{stocksInv:si,stocksCur:sc,etfsInv:ei,etfsCur:ec,totalInv:si+ei,totalCur:sc+ec};
-}
-
-function getPlan(planId){return(state.plans||[]).find(p=>p.id===planId)||{name:planId,color:'#64748b'}}
-
-
-function sanitizeHTML(str){
-  if(!str)return '';
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
-}
-
-function sanitizeURL(url){
-  if(!url)return '#';
-  var s=String(url).trim();
-  if(s.startsWith('http://')||s.startsWith('https://'))return s;
-  return '#';
-}
-
-
-async function robustYahooFetch(ticker,range,interval){
-  var params='range='+range+'&interval='+(interval||'1d');
-  var proxies=['https://corsproxy.io/?url=','https://api.allorigins.win/raw?url='];
-  // Try the ticker as-is first
-  for(var proxy of proxies){
-    try{
-      var r=await fetch(proxy+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?'+params));
-      if(!r.ok)continue;
-      var d=await r.json();
-      if(d.chart?.result?.[0])return d;
-    }catch(e){continue}
-  }
-  // If ticker has no dot (no exchange suffix), try common European suffixes
-  if(ticker.indexOf('.')===-1){
-    var suffixes=['.DE','.L','.AS','.MI','.PA','.MC','.SW','.CO'];
-    for(var suf of suffixes){
-      for(var proxy of proxies){
-        try{
-          var r=await fetch(proxy+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+suf+'?'+params));
-          if(!r.ok)continue;
-          var d=await r.json();
-          if(d.chart?.result?.[0]){
-            console.log('Found '+ticker+' as '+ticker+suf);
-            return d;
-          }
-        }catch(e){continue}
-      }
-    }
-  }
-  return null;
-}
-
-function showToast(msg,type='success'){
-  const t=document.createElement('div');
-  t.className='toast'+(type==='error'?' error':'');
-  t.textContent=msg;
-  document.getElementById('toastContainer').appendChild(t);
-  setTimeout(()=>t.remove(),3000);
-}
-
-function exportData(){
-  localStorage.setItem('last_backup_date',Date.now().toString());
-  var reminder=document.getElementById('backupReminder');if(reminder)reminder.remove();
-  const blob=new Blob([JSON.stringify(allAccounts,null,2)],{type:'application/json'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download=`portfolio_backup_${new Date().toISOString().split('T')[0]}.json`;
-  a.click();
+ck();
   showToast('Backup exportado!');
 }
 
@@ -952,199 +687,6 @@ function removeYTChannel(i){
 }
 
 
-
-// ══════════════════════════════════════════
-// 📐 TECHNICAL INDICATORS
-// ══════════════════════════════════════════
-function calcMA(closes,period){
-  var result=[];
-  for(var i=0;i<closes.length;i++){
-    if(i<period-1||closes[i]==null){result.push(null);continue}
-    var sum=0,count=0;
-    for(var j=i-period+1;j<=i;j++){if(closes[j]!=null){sum+=closes[j];count++}}
-    result.push(count>0?sum/count:null);
-  }
-  return result;
-}
-
-function calcRSI(closes,period){
-  period=period||14;
-  var result=[];var gains=[];var losses=[];
-  for(var i=0;i<closes.length;i++){
-    if(i===0||closes[i]==null||closes[i-1]==null){result.push(null);continue}
-    var change=closes[i]-closes[i-1];
-    gains.push(change>0?change:0);
-    losses.push(change<0?-change:0);
-    if(gains.length<period){result.push(null);continue}
-    if(gains.length===period){
-      var avgGain=gains.reduce(function(a,b){return a+b},0)/period;
-      var avgLoss=losses.reduce(function(a,b){return a+b},0)/period;
-    }else{
-      var avgGain=(avgGain*(period-1)+gains[gains.length-1])/period;
-      var avgLoss=(avgLoss*(period-1)+losses[losses.length-1])/period;
-    }
-    var rs=avgLoss===0?100:avgGain/avgLoss;
-    result.push(100-100/(1+rs));
-  }
-  return result;
-}
-
-function calcMACD(closes,fast,slow,signal){
-  fast=fast||12;slow=slow||26;signal=signal||9;
-  var emaFast=calcEMA(closes,fast);
-  var emaSlow=calcEMA(closes,slow);
-  var macdLine=[];
-  for(var i=0;i<closes.length;i++){
-    if(emaFast[i]!=null&&emaSlow[i]!=null)macdLine.push(emaFast[i]-emaSlow[i]);
-    else macdLine.push(null);
-  }
-  var signalLine=calcEMA(macdLine,signal);
-  var histogram=[];
-  for(var i=0;i<macdLine.length;i++){
-    if(macdLine[i]!=null&&signalLine[i]!=null)histogram.push(macdLine[i]-signalLine[i]);
-    else histogram.push(null);
-  }
-  return{macd:macdLine,signal:signalLine,histogram:histogram};
-}
-
-function calcEMA(data,period){
-  var result=[];var multiplier=2/(period+1);var ema=null;
-  for(var i=0;i<data.length;i++){
-    if(data[i]==null){result.push(ema);continue}
-    if(ema===null){
-      // Use SMA for first value
-      var sum=0,count=0;
-      for(var j=Math.max(0,i-period+1);j<=i;j++){if(data[j]!=null){sum+=data[j];count++}}
-      if(count>=period){ema=sum/count}
-      result.push(ema);
-    }else{
-      ema=(data[i]-ema)*multiplier+ema;
-      result.push(ema);
-    }
-  }
-  return result;
-}
-
-function calcATR(highs,lows,closes,period){
-  period=period||14;
-  var trs=[];var result=[];
-  for(var i=0;i<closes.length;i++){
-    if(i===0||highs[i]==null||lows[i]==null||closes[i-1]==null){result.push(null);trs.push(0);continue}
-    var tr=Math.max(highs[i]-lows[i],Math.abs(highs[i]-closes[i-1]),Math.abs(lows[i]-closes[i-1]));
-    trs.push(tr);
-    if(trs.length<period+1){result.push(null);continue}
-    var sum=0;for(var j=trs.length-period;j<trs.length;j++)sum+=trs[j];
-    result.push(sum/period);
-  }
-  return result;
-}
-
-function getTickerNotes(ticker){
-  var notes=state.tickerNotes||{};
-  return notes[ticker]||{text:'',target:null,reinforcement:null,stop:null};
-}
-
-function saveTickerNotes(ticker,data){
-  if(!state.tickerNotes)state.tickerNotes={};
-  state.tickerNotes[ticker]=data;
-  saveData();
-}
-
-function calcSignals(ticker,closes,highs,lows){
-  if(!closes||closes.length<50)return[];
-  var signals=[];
-  var price=closes[closes.length-1];
-  var ma20=calcMA(closes,20);var ma50=calcMA(closes,50);var ma200=calcMA(closes,200);
-  var rsi=calcRSI(closes,14);
-  var atr=calcATR(highs||closes,lows||closes,closes,14);
-  var valid=closes.filter(function(v){return v!=null});
-  var high52=Math.max.apply(null,valid);
-  var low52=Math.min.apply(null,valid);
-  var lastRSI=null;for(var i=rsi.length-1;i>=0;i--){if(rsi[i]!=null){lastRSI=rsi[i];break}}
-  var lastMA50=null;for(var i=ma50.length-1;i>=0;i--){if(ma50[i]!=null){lastMA50=ma50[i];break}}
-  var lastMA200=null;for(var i=ma200.length-1;i>=0;i--){if(ma200[i]!=null){lastMA200=ma200[i];break}}
-  var lastATR=null;for(var i=atr.length-1;i>=0;i--){if(atr[i]!=null){lastATR=atr[i];break}}
-
-  // RSI signals
-  if(lastRSI!=null){
-    if(lastRSI<30)signals.push({type:'green',text:'RSI baixo ('+lastRSI.toFixed(0)+')'});
-    else if(lastRSI>70)signals.push({type:'red',text:'RSI alto ('+lastRSI.toFixed(0)+')'});
-  }
-  // MA200 proximity
-  if(lastMA200!=null&&price){
-    var distMA200=((price-lastMA200)/lastMA200)*100;
-    if(Math.abs(distMA200)<3)signals.push({type:'blue',text:'Perto da MA200'});
-    if(price>lastMA200&&lastMA50&&lastMA50>lastMA200)signals.push({type:'green',text:'Acima MA50+MA200'});
-    if(price<lastMA200)signals.push({type:'red',text:'Abaixo da MA200'});
-  }
-  // 52w proximity
-  if(high52&&low52&&price){
-    var distLow=((price-low52)/low52)*100;
-    var distHigh=((price-high52)/high52)*100;
-    if(distLow<10)signals.push({type:'green',text:'Perto mín 52s ('+distLow.toFixed(0)+'%)'});
-    if(Math.abs(distHigh)<5)signals.push({type:'yellow',text:'Perto máx 52s'});
-  }
-  // Yield
-  var stock=state.stocks.find(function(s){return s.ticker===ticker});
-  if(stock&&stock.divYield>=5)signals.push({type:'green',text:'Yield >5% ('+stock.divYield+'%)'});
-  // ATR
-  if(lastATR!=null&&price){
-    var atrPct=(lastATR/price)*100;
-    if(atrPct>3)signals.push({type:'yellow',text:'Vol. alta (ATR '+atrPct.toFixed(1)+'%)'});
-  }
-  return signals;
-}
-
-function interpretStock(closes,highs,lows){
-  if(!closes||closes.length<50)return null;
-  var price=closes[closes.length-1];
-  var ma50=calcMA(closes,50);var ma200=calcMA(closes,200);
-  var rsi=calcRSI(closes,14);
-  var macdData=calcMACD(closes);
-  var atr=calcATR(highs||closes,lows||closes,closes,14);
-  var lastMA50=null,lastMA200=null,lastRSI=null,lastMACD=null,lastATR=null;
-  for(var i=ma50.length-1;i>=0;i--){if(ma50[i]!=null){lastMA50=ma50[i];break}}
-  for(var i=ma200.length-1;i>=0;i--){if(ma200[i]!=null){lastMA200=ma200[i];break}}
-  for(var i=rsi.length-1;i>=0;i--){if(rsi[i]!=null){lastRSI=rsi[i];break}}
-  for(var i=macdData.histogram.length-1;i>=0;i--){if(macdData.histogram[i]!=null){lastMACD=macdData.histogram[i];break}}
-  for(var i=atr.length-1;i>=0;i--){if(atr[i]!=null){lastATR=atr[i];break}}
-
-  var trend='Neutra',trendColor='var(--yellow)';
-  if(lastMA50&&lastMA200){
-    if(price>lastMA50&&lastMA50>lastMA200){trend='Bullish';trendColor='var(--green)'}
-    else if(price<lastMA50&&lastMA50<lastMA200){trend='Bearish';trendColor='var(--red)'}
-    else if(price>lastMA200){trend='Ligeiramente bullish';trendColor='var(--green)'}
-    else{trend='Ligeiramente bearish';trendColor='var(--red)'}
-  }
-
-  var momentum='Neutro',momColor='var(--yellow)';
-  if(lastRSI!=null){
-    if(lastRSI>60&&lastMACD>0){momentum='Forte';momColor='var(--green)'}
-    else if(lastRSI<40&&lastMACD<0){momentum='Fraco';momColor='var(--red)'}
-    else if(lastRSI>70){momentum='Sobrecomprado';momColor='var(--red)'}
-    else if(lastRSI<30){momentum='Sobrevendido';momColor='var(--green)'}
-  }
-
-  var risk='Médio',riskColor='var(--yellow)';
-  if(lastATR!=null&&price){
-    var atrPct=(lastATR/price)*100;
-    if(atrPct<1.5){risk='Baixo';riskColor='var(--green)'}
-    else if(atrPct>3){risk='Alto';riskColor='var(--red)'}
-  }
-
-  var valid=closes.filter(function(v){return v!=null});
-  var low52=Math.min.apply(null,valid);
-  var high52=Math.max.apply(null,valid);
-  var distLow=low52>0?((price-low52)/low52)*100:0;
-  var distHigh=high52>0?((price-high52)/high52)*100:0;
-  var setup='Zona neutra',setupColor='var(--yellow)';
-  if(distLow<10){setup='Perto de suporte';setupColor='var(--green)'}
-  else if(Math.abs(distHigh)<5){setup='Esticada (perto do máximo)';setupColor='var(--red)'}
-  else if(price>lastMA50&&lastRSI<50){setup='Zona de interesse';setupColor='var(--accent)'}
-
-  return{trend:trend,trendColor:trendColor,momentum:momentum,momColor:momColor,risk:risk,riskColor:riskColor,setup:setup,setupColor:setupColor,rsi:lastRSI,atrPct:lastATR&&price?(lastATR/price)*100:null};
-}
-
 // ══════════════════════════════════════════
 // 🔬 ANALISADOR DE AÇÕES
 // ══════════════════════════════════════════
@@ -1584,8 +1126,6 @@ function initAnalyzerChart(){
   charts.analyzerTVResize=resizeObs;
 }
 
-
-
 // ══════════════════════════════════════════
 // 🔬 ANALISADOR DE ETFs
 // ══════════════════════════════════════════
@@ -1924,8 +1464,6 @@ function generatePDFReport(){
   showToast('Relatório PDF gerado!');
 }
 
-
-
 // ══════════════════════════════════════════
 // ⚖️ COMPARADOR DE ETFs
 // ══════════════════════════════════════════
@@ -2188,8 +1726,6 @@ function addUsefulLink(){
     state.usefulLinks=allLinks;
   });
 }
-
-
 
 // ══════════════════════════════════════════
 // 🧠 PORTFOLIO INTELLIGENCE
@@ -2892,8 +2428,6 @@ function initYieldChart(){
   });
 }
 
-
-
 function initPortfolioHistoryChart(){
   var hist=state.portfolioHistory||[];
   var ctx=document.getElementById('chartPortfolioHistory');
@@ -3495,6 +3029,64 @@ function resetOnboarding(){
   localStorage.removeItem('onboarding_done');
   showOnboarding();
 }
+
+
+// Window bindings for onclick handlers in HTML strings
+if(typeof addDecision === 'function') window.addDecision = addDecision;
+if(typeof addDivReceived === 'function') window.addDivReceived = addDivReceived;
+if(typeof addETF === 'function') window.addETF = addETF;
+if(typeof addStock === 'function') window.addStock = addStock;
+if(typeof addUsefulLink === 'function') window.addUsefulLink = addUsefulLink;
+if(typeof addWatchlistETF === 'function') window.addWatchlistETF = addWatchlistETF;
+if(typeof addWatchlistStock === 'function') window.addWatchlistStock = addWatchlistStock;
+if(typeof analyzeETF === 'function') window.analyzeETF = analyzeETF;
+if(typeof analyzeStock === 'function') window.analyzeStock = analyzeStock;
+if(typeof autoFillTicker === 'function') window.autoFillTicker = autoFillTicker;
+if(typeof calcCorrelation === 'function') window.calcCorrelation = calcCorrelation;
+if(typeof changeAnalyzerPeriod === 'function') window.changeAnalyzerPeriod = changeAnalyzerPeriod;
+if(typeof closeOnboarding === 'function') window.closeOnboarding = closeOnboarding;
+if(typeof compareETFs === 'function') window.compareETFs = compareETFs;
+if(typeof deleteDecision === 'function') window.deleteDecision = deleteDecision;
+if(typeof deleteDivReceived === 'function') window.deleteDivReceived = deleteDivReceived;
+if(typeof deleteETF === 'function') window.deleteETF = deleteETF;
+if(typeof deletePlan === 'function') window.deletePlan = deletePlan;
+if(typeof deleteSnapshot === 'function') window.deleteSnapshot = deleteSnapshot;
+if(typeof deleteStock === 'function') window.deleteStock = deleteStock;
+if(typeof deleteWatchlistETF === 'function') window.deleteWatchlistETF = deleteWatchlistETF;
+if(typeof deleteWatchlistStock === 'function') window.deleteWatchlistStock = deleteWatchlistStock;
+if(typeof editDivGoal === 'function') window.editDivGoal = editDivGoal;
+if(typeof editETF === 'function') window.editETF = editETF;
+if(typeof editStock === 'function') window.editStock = editStock;
+if(typeof editUnusedCapital === 'function') window.editUnusedCapital = editUnusedCapital;
+if(typeof editWatchlistETF === 'function') window.editWatchlistETF = editWatchlistETF;
+if(typeof editWatchlistStock === 'function') window.editWatchlistStock = editWatchlistStock;
+if(typeof exportData === 'function') window.exportData = exportData;
+if(typeof generatePDFReport === 'function') window.generatePDFReport = generatePDFReport;
+if(typeof if === 'function') window.if = if;
+if(typeof importCSVData === 'function') window.importCSVData = importCSVData;
+if(typeof importData === 'function') window.importData = importData;
+if(typeof loadFeedData === 'function') window.loadFeedData = loadFeedData;
+if(typeof manageFeedSources === 'function') window.manageFeedSources = manageFeedSources;
+if(typeof managePlans === 'function') window.managePlans = managePlans;
+if(typeof manageYTChannels === 'function') window.manageYTChannels = manageYTChannels;
+if(typeof moveFeedSource === 'function') window.moveFeedSource = moveFeedSource;
+if(typeof moveYTChannel === 'function') window.moveYTChannel = moveYTChannel;
+if(typeof refreshPrices === 'function') window.refreshPrices = refreshPrices;
+if(typeof removeFeedSource === 'function') window.removeFeedSource = removeFeedSource;
+if(typeof removeYTChannel === 'function') window.removeYTChannel = removeYTChannel;
+if(typeof render === 'function') window.render = render;
+if(typeof resetOnboarding === 'function') window.resetOnboarding = resetOnboarding;
+if(typeof saveAnalyzerNotes === 'function') window.saveAnalyzerNotes = saveAnalyzerNotes;
+if(typeof saveData === 'function') window.saveData = saveData;
+if(typeof setAnalyzerChartType === 'function') window.setAnalyzerChartType = setAnalyzerChartType;
+if(typeof showToast === 'function') window.showToast = showToast;
+if(typeof switchTab === 'function') window.switchTab = switchTab;
+if(typeof takeSnapshot === 'function') window.takeSnapshot = takeSnapshot;
+if(typeof toggleFeedOrder === 'function') window.toggleFeedOrder = toggleFeedOrder;
+if(typeof toggleOverlay === 'function') window.toggleOverlay = toggleOverlay;
+if(typeof updateAllPrices === 'function') window.updateAllPrices = updateAllPrices;
+if(typeof updateFIRE === 'function') window.updateFIRE = updateFIRE;
+if(typeof updateSim === 'function') window.updateSim = updateSim;
 
 // ══════════════════════════════════════════
 // INIT
