@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Portfolio Manager</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
 <style>
 :root{--bg:#0a0f1a;--card:#111827;--card2:#1a2332;--border:#1e293b;--accent:#3b82f6;--accent-light:#60a5fa;--green:#10b981;--red:#ef4444;--yellow:#f59e0b;--orange:#f97316;--purple:#8b5cf6;--pink:#ec4899;--cyan:#06b6d4;--text:#f1f5f9;--text-muted:#94a3b8;--text-dim:#64748b}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -170,6 +171,14 @@ tr:hover{background:rgba(255,255,255,.02)}
 .feed-order-btn{padding:4px 8px;font-size:10px;cursor:pointer;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-muted)}
 .feed-order-btn:hover{border-color:var(--accent);color:var(--accent-light)}
 .feed-section-toggle{display:flex;gap:8px;margin-bottom:16px}
+.corr-matrix{display:grid;gap:2px;margin:16px 0}
+.corr-cell{padding:8px;text-align:center;font-size:11px;font-weight:700;border-radius:4px}
+.corr-label{font-size:10px;font-weight:700;color:var(--text-muted);padding:8px;text-align:center}
+.etf-analyzer-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:8px}
+.etf-analyzer-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.etf-analyzer-row:last-child{border:none}
+.pdf-btn{padding:8px 20px;border-radius:10px;border:1px solid var(--green);background:rgba(16,185,129,.1);color:var(--green);cursor:pointer;font-size:13px;font-weight:700;transition:all .15s}
+.pdf-btn:hover{background:rgba(16,185,129,.2)}
 </style>
 </head>
 <body>
@@ -225,7 +234,9 @@ const TABS=[
   {id:"watchlist",label:"👀 Watchlist"},
   {id:"history",label:"📋 Histórico"},
   {id:"fire",label:"🔥 FIRE"},
-  {id:"analyzer",label:"🔬 Analisador"},
+  {id:"analyzer",label:"🔬 Ações"},
+  {id:"etfanalyzer",label:"🔬 ETFs"},
+  {id:"correlation",label:"📐 Correlação"},
   {id:"links",label:"🔗 Links Úteis"}
 ];
 
@@ -675,6 +686,8 @@ function renderContent(){
     case 'history':el.innerHTML=renderHistory();break;
     case 'fire':el.innerHTML=renderFIRE();break;
     case 'analyzer':el.innerHTML=renderAnalyzer();break;
+    case 'etfanalyzer':el.innerHTML=renderETFAnalyzer();break;
+    case 'correlation':el.innerHTML=renderCorrelation();break;
     case 'links':el.innerHTML=renderLinks();break;
   }
   setTimeout(initCharts,50);
@@ -1017,6 +1030,329 @@ function initAnalyzerChart(){
       scales:{y:{grid:{color:'#1e293b'},ticks:{callback:function(v){return analyzerData.currency==='EUR'?'\u20ac'+v:'$'+v}}},x:{grid:{display:false},ticks:{maxTicksLimit:8}}}
     }
   });
+}
+
+
+
+// ══════════════════════════════════════════
+// 🔬 ANALISADOR DE ETFs
+// ══════════════════════════════════════════
+window._etfAnalyzerData=null;
+
+function renderETFAnalyzer(){
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 style="font-size:18px;font-weight:800">🔬 Analisador de ETFs</h2></div>';
+  html+='<div class="analyzer-search"><input id="etf_analyzer_ticker" placeholder="Ticker ou ISIN (ex: CSPX, VHYL, IE00B5BMR087...)" value="'+(window._etfAnalyzerTicker||'')+'" onkeydown="if(event.key===\'Enter\')analyzeETF()"><button class="btn btn-primary" onclick="analyzeETF()">🔍 Analisar</button></div>';
+  html+='<div id="etfAnalyzerResult">';
+  if(window._etfAnalyzerData){html+=renderETFAnalyzerResult()}
+  else{html+='<div style="text-align:center;padding:60px;color:var(--text-dim)">Introduz um ticker de ETF para ver dados detalhados.<br><br>Dica: Para ETFs europeus, usa o ticker da bolsa (ex: CSPX.L, VHYL.L) ou o ticker curto (CSPX, IWDA)</div>'}
+  html+='</div>';
+  return html;
+}
+
+async function analyzeETF(){
+  var ticker=document.getElementById('etf_analyzer_ticker').value.trim().toUpperCase();
+  if(!ticker)return;
+  window._etfAnalyzerTicker=ticker;
+  var container=document.getElementById('etfAnalyzerResult');
+  container.innerHTML='<div style="text-align:center;padding:40px"><span class="spinner"></span> A analisar '+ticker+'...</div>';
+
+  try{
+    var r=await fetch('https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range=1y&interval=1d'));
+    var d=await r.json();
+    var meta=d.chart?.result?.[0]?.meta;
+    var timestamps=d.chart?.result?.[0]?.timestamp||[];
+    var closes=d.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[];
+
+    if(!meta){container.innerHTML='<div style="text-align:center;padding:40px;color:var(--red)">ETF "'+ticker+'" não encontrado. Tenta com sufixo de bolsa (ex: CSPX.L)</div>';return}
+
+    var price=meta.regularMarketPrice;
+    var prevClose=meta.chartPreviousClose||price;
+    var dayChange=price-prevClose;
+    var dayChangePct=(dayChange/prevClose)*100;
+    var validCloses=closes.filter(function(v){return v!=null});
+    var high52w=Math.max.apply(null,validCloses);
+    var low52w=Math.min.apply(null,validCloses);
+
+    // Calculate returns
+    var returns={};
+    if(validCloses.length>0){
+      var latest=validCloses[validCloses.length-1];
+      if(validCloses.length>=22)returns['1M']=((latest/validCloses[validCloses.length-22]-1)*100);
+      if(validCloses.length>=66)returns['3M']=((latest/validCloses[validCloses.length-66]-1)*100);
+      if(validCloses.length>=132)returns['6M']=((latest/validCloses[validCloses.length-132]-1)*100);
+      if(validCloses.length>=252)returns['1A']=((latest/validCloses[0]-1)*100);
+      // Volatility (annualized std dev of daily returns)
+      var dailyReturns=[];
+      for(var i=1;i<validCloses.length;i++){if(validCloses[i]&&validCloses[i-1])dailyReturns.push(validCloses[i]/validCloses[i-1]-1)}
+      var mean=dailyReturns.reduce(function(a,b){return a+b},0)/dailyReturns.length;
+      var variance=dailyReturns.reduce(function(a,b){return a+(b-mean)*(b-mean)},0)/dailyReturns.length;
+      returns.volatility=Math.sqrt(variance)*Math.sqrt(252)*100;
+    }
+
+    // Check if in portfolio
+    var inPortfolio=state.etfs.find(function(e){return e.ticker===ticker});
+    var isin='';
+    if(inPortfolio)isin=inPortfolio.isin||'';
+
+    window._etfAnalyzerData={
+      ticker:ticker,name:meta.shortName||meta.longName||ticker,
+      currency:meta.currency||'USD',exchange:meta.exchangeName||'',
+      price:price,dayChange:dayChange,dayChangePct:dayChangePct,
+      high52w:high52w,low52w:low52w,returns:returns,
+      timestamps:timestamps,closes:closes,inPortfolio:inPortfolio,isin:isin
+    };
+
+    container.innerHTML=renderETFAnalyzerResult();
+    setTimeout(function(){initETFAnalyzerChart()},100);
+  }catch(e){
+    container.innerHTML='<div style="text-align:center;padding:40px;color:var(--red)">Erro: '+e.message+'</div>';
+  }
+}
+
+function renderETFAnalyzerResult(){
+  var d=window._etfAnalyzerData;if(!d)return '';
+  var cur=d.currency==='EUR'?'\u20ac':'$';
+  var isPos=d.dayChange>=0;
+  var ret=d.returns||{};
+
+  var portfolioInfo='';
+  if(d.inPortfolio){
+    var e=d.inPortfolio;
+    var pl=e.current-e.invested;
+    var plPct=e.invested>0?((pl/e.invested)*100):0;
+    portfolioInfo='<div class="card" style="border-color:var(--accent)"><div class="card-title">📦 Na tua carteira</div><div class="analyzer-grid"><div class="analyzer-metric"><div class="analyzer-metric-label">Investido</div><div class="analyzer-metric-value">'+fmt(e.invested)+'</div></div><div class="analyzer-metric"><div class="analyzer-metric-label">Valor Atual</div><div class="analyzer-metric-value">'+fmt(e.current)+'</div></div><div class="analyzer-metric"><div class="analyzer-metric-label">P&L</div><div class="analyzer-metric-value" style="color:'+(pl>=0?'var(--green)':'var(--red)')+'">'+fmt(pl)+' ('+plPct.toFixed(2)+'%)</div></div><div class="analyzer-metric"><div class="analyzer-metric-label">Tipo</div><div class="analyzer-metric-value">'+e.type+'</div></div></div></div>';
+  }
+
+  var retHTML='';
+  ['1M','3M','6M','1A'].forEach(function(p){
+    if(ret[p]!=null){
+      var col=ret[p]>=0?'var(--green)':'var(--red)';
+      retHTML+='<div class="analyzer-metric"><div class="analyzer-metric-label">Retorno '+p+'</div><div class="analyzer-metric-value" style="color:'+col+'">'+(ret[p]>=0?'+':'')+ret[p].toFixed(2)+'%</div></div>';
+    }
+  });
+  if(ret.volatility!=null){
+    retHTML+='<div class="analyzer-metric"><div class="analyzer-metric-label">Volatilidade (anual)</div><div class="analyzer-metric-value" style="color:var(--yellow)">'+ret.volatility.toFixed(2)+'%</div></div>';
+  }
+  var sharpe='';
+  if(ret['1A']!=null&&ret.volatility>0){
+    var sr=(ret['1A']-3)/ret.volatility; // risk-free ~3%
+    sharpe='<div class="analyzer-metric"><div class="analyzer-metric-label">Sharpe Ratio (1A)</div><div class="analyzer-metric-value" style="color:'+(sr>=1?'var(--green)':sr>=0.5?'var(--yellow)':'var(--red)')+'">'+sr.toFixed(2)+'</div></div>';
+  }
+
+  var justETFLink=d.isin?'https://www.justetf.com/en/etf-profile.html?isin='+d.isin:'https://www.justetf.com/en/search.html?search='+d.ticker;
+
+  return '<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px"><div><div style="font-size:12px;color:var(--text-muted)">'+d.exchange+'</div><div style="font-size:22px;font-weight:800">'+d.name+' <span style="color:var(--accent)">('+d.ticker+')</span></div></div><div style="text-align:right"><div style="font-size:28px;font-weight:800">'+cur+d.price.toFixed(2)+'</div><div style="font-size:14px;font-weight:700;color:'+(isPos?'var(--green)':'var(--red)')+'">'+(isPos?'+':'')+d.dayChange.toFixed(2)+' ('+(isPos?'+':'')+d.dayChangePct.toFixed(2)+'%)</div></div></div>'+
+    '<div class="analyzer-grid"><div class="analyzer-metric"><div class="analyzer-metric-label">Máx 52 sem</div><div class="analyzer-metric-value">'+cur+d.high52w.toFixed(2)+'</div></div><div class="analyzer-metric"><div class="analyzer-metric-label">Mín 52 sem</div><div class="analyzer-metric-value">'+cur+d.low52w.toFixed(2)+'</div></div>'+retHTML+sharpe+'</div>'+
+    '<div style="display:flex;gap:8px;margin:16px 0"><a href="'+justETFLink+'" target="_blank" class="btn btn-sm" style="text-decoration:none">justETF ↗</a><a href="https://finance.yahoo.com/quote/'+d.ticker+'" target="_blank" class="btn btn-sm" style="text-decoration:none">Yahoo Finance ↗</a><a href="https://www.morningstar.com/search?query='+d.ticker+'" target="_blank" class="btn btn-sm" style="text-decoration:none">Morningstar ↗</a></div></div>'+
+    portfolioInfo+
+    '<div class="card"><div class="card-title">Gráfico de Preços (1 Ano)</div><div class="chart-wrap"><canvas id="chartETFAnalyzer" height="300"></canvas></div></div>';
+}
+
+function initETFAnalyzerChart(){
+  var d=window._etfAnalyzerData;if(!d)return;
+  var ctx=document.getElementById('chartETFAnalyzer');if(!ctx)return;
+  var dates=d.timestamps.map(function(t){return new Date(t*1000).toLocaleDateString('pt-PT')});
+  var prices=d.closes;
+  var first=prices.find(function(p){return p!=null})||0;
+  charts.etfAnalyzer=new Chart(ctx,{
+    type:'line',data:{labels:dates,datasets:[{label:d.ticker,data:prices,borderColor:prices[prices.length-1]>=first?'rgba(16,185,129,.9)':'rgba(239,68,68,.9)',backgroundColor:prices[prices.length-1]>=first?'rgba(16,185,129,.08)':'rgba(239,68,68,.08)',fill:true,tension:.2,borderWidth:2,pointRadius:0}]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{backgroundColor:'#1e293b',borderColor:'#334155',borderWidth:1}},scales:{y:{grid:{color:'#1e293b'}},x:{grid:{display:false},ticks:{maxTicksLimit:8}}}}
+  });
+}
+
+// ══════════════════════════════════════════
+// 📐 ANÁLISE DE CORRELAÇÃO
+// ══════════════════════════════════════════
+function renderCorrelation(){
+  var stocks=state.stocks||[];
+  if(stocks.length<2){
+    return '<div class="card"><div class="card-title">📐 Análise de Correlação</div><p style="color:var(--text-dim)">Precisas de pelo menos 2 ações no portfolio para ver a correlação.</p></div>';
+  }
+  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 style="font-size:18px;font-weight:800">📐 Análise de Correlação</h2><button class="btn btn-primary" onclick="calcCorrelation()">🔄 Calcular Correlação</button></div>'+
+    '<div class="card"><div class="card-title">Matriz de Correlação das Ações</div><div style="font-size:11px;color:var(--text-dim);margin-bottom:12px">Mostra como os preços das tuas ações se movem juntos. Valores próximos de 1 = muito correlacionados (risco), valores próximos de 0 = independentes (bom), negativos = movem-se em direções opostas (excelente diversificação)</div><div id="corrMatrix"><div style="text-align:center;padding:40px;color:var(--text-dim)">Clica "Calcular Correlação" para analisar (demora alguns segundos)</div></div></div>'+
+    '<div class="card"><div class="card-title">Resumo de Diversificação</div><div id="corrSummary"></div></div>'+
+    '<div class="card"><div class="card-title">Comparação de Performance (1 Ano)</div><div class="chart-wrap"><canvas id="chartCorrelation" height="300"></canvas></div></div>';
+}
+
+async function calcCorrelation(){
+  var stocks=state.stocks||[];
+  var container=document.getElementById('corrMatrix');
+  var summary=document.getElementById('corrSummary');
+  container.innerHTML='<div style="text-align:center;padding:30px"><span class="spinner"></span> A calcular correlações...</div>';
+
+  // Fetch 1 year of daily data for each stock
+  var allData={};
+  for(var s of stocks){
+    try{
+      var r=await fetch('https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+s.ticker+'?range=1y&interval=1d'));
+      var d=await r.json();
+      var closes=d.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[];
+      // Calculate daily returns
+      var returns=[];
+      for(var i=1;i<closes.length;i++){
+        if(closes[i]!=null&&closes[i-1]!=null&&closes[i-1]!==0){returns.push(closes[i]/closes[i-1]-1)}
+        else{returns.push(0)}
+      }
+      allData[s.ticker]={returns:returns,closes:closes};
+    }catch(e){console.warn('Corr fetch error for '+s.ticker,e)}
+    await new Promise(function(r){setTimeout(r,300)});
+  }
+
+  // Calculate correlation matrix
+  var tickers=stocks.map(function(s){return s.ticker}).filter(function(t){return allData[t]});
+  var n=tickers.length;
+  var matrix=[];
+
+  for(var i=0;i<n;i++){
+    matrix[i]=[];
+    for(var j=0;j<n;j++){
+      if(i===j){matrix[i][j]=1;continue}
+      var r1=allData[tickers[i]].returns;
+      var r2=allData[tickers[j]].returns;
+      var minLen=Math.min(r1.length,r2.length);
+      var a=r1.slice(-minLen),b=r2.slice(-minLen);
+      var meanA=a.reduce(function(s,v){return s+v},0)/minLen;
+      var meanB=b.reduce(function(s,v){return s+v},0)/minLen;
+      var cov=0,varA=0,varB=0;
+      for(var k=0;k<minLen;k++){
+        cov+=(a[k]-meanA)*(b[k]-meanB);
+        varA+=(a[k]-meanA)*(a[k]-meanA);
+        varB+=(b[k]-meanB)*(b[k]-meanB);
+      }
+      matrix[i][j]=(varA>0&&varB>0)?(cov/Math.sqrt(varA*varB)):0;
+    }
+  }
+
+  // Render matrix
+  var cols=n+1;
+  var html='<div class="corr-matrix" style="grid-template-columns:60px repeat('+n+',1fr)">';
+  html+='<div></div>';
+  for(var j=0;j<n;j++)html+='<div class="corr-label">'+tickers[j]+'</div>';
+  for(var i=0;i<n;i++){
+    html+='<div class="corr-label">'+tickers[i]+'</div>';
+    for(var j=0;j<n;j++){
+      var v=matrix[i][j];
+      var bg,txt;
+      if(i===j){bg='rgba(59,130,246,.2)';txt='var(--accent)'}
+      else if(v>=0.7){bg='rgba(239,68,68,.3)';txt='var(--red)'}
+      else if(v>=0.4){bg='rgba(245,158,11,.2)';txt='var(--yellow)'}
+      else if(v>=-0.1){bg='rgba(16,185,129,.2)';txt='var(--green)'}
+      else{bg='rgba(6,182,212,.2)';txt='var(--cyan)'}
+      html+='<div class="corr-cell" style="background:'+bg+';color:'+txt+'">'+v.toFixed(2)+'</div>';
+    }
+  }
+  html+='</div>';
+  html+='<div style="display:flex;gap:16px;margin-top:12px;font-size:10px;color:var(--text-dim);justify-content:center"><span style="color:var(--red)">■ >0.7 Alta correlação (risco)</span><span style="color:var(--yellow)">■ 0.4-0.7 Moderada</span><span style="color:var(--green)">■ 0-0.4 Baixa (bom)</span><span style="color:var(--cyan)">■ <0 Negativa (excelente)</span></div>';
+  container.innerHTML=html;
+
+  // Summary
+  var avgCorr=0,count=0,highPairs=[];
+  for(var i=0;i<n;i++){for(var j=i+1;j<n;j++){avgCorr+=Math.abs(matrix[i][j]);count++;if(matrix[i][j]>=0.7)highPairs.push(tickers[i]+'/'+tickers[j]+' ('+matrix[i][j].toFixed(2)+')')}}
+  avgCorr=count>0?avgCorr/count:0;
+  var divScore=avgCorr<0.3?'Excelente':avgCorr<0.5?'Boa':avgCorr<0.7?'Moderada':'Fraca';
+  var divColor=avgCorr<0.3?'var(--green)':avgCorr<0.5?'var(--yellow)':avgCorr<0.7?'var(--orange)':'var(--red)';
+
+  summary.innerHTML='<div class="analyzer-grid"><div class="analyzer-metric"><div class="analyzer-metric-label">Diversificação</div><div class="analyzer-metric-value" style="color:'+divColor+'">'+divScore+'</div></div><div class="analyzer-metric"><div class="analyzer-metric-label">Correlação Média</div><div class="analyzer-metric-value">'+avgCorr.toFixed(2)+'</div></div></div>'+
+    (highPairs.length>0?'<div style="margin-top:12px;padding:12px;background:rgba(239,68,68,.08);border-radius:8px;border:1px solid rgba(239,68,68,.2)"><div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:4px">⚠️ Pares altamente correlacionados:</div><div style="font-size:12px;color:var(--text)">'+highPairs.join(', ')+'</div><div style="font-size:10px;color:var(--text-dim);margin-top:4px">Considere diversificar — estas ações movem-se muito juntas</div></div>':'<div style="margin-top:12px;padding:12px;background:rgba(16,185,129,.08);border-radius:8px;border:1px solid rgba(16,185,129,.2)"><div style="font-size:11px;font-weight:700;color:var(--green)">✅ Sem pares altamente correlacionados — boa diversificação!</div></div>');
+
+  // Performance comparison chart
+  destroyCharts();
+  var ctx=document.getElementById('chartCorrelation');
+  if(ctx){
+    var datasets=tickers.map(function(t,i){
+      var cls=allData[t].closes.filter(function(v){return v!=null});
+      var base=cls[0]||1;
+      var normalized=cls.map(function(v){return((v/base)-1)*100});
+      var colors=['rgba(59,130,246,.8)','rgba(16,185,129,.8)','rgba(245,158,11,.8)','rgba(239,68,68,.8)','rgba(139,92,246,.8)','rgba(236,72,153,.8)','rgba(6,182,212,.8)'];
+      return{label:t,data:normalized,borderColor:colors[i%colors.length],borderWidth:2,tension:.3,pointRadius:0,fill:false};
+    });
+    charts.correlation=new Chart(ctx,{
+      type:'line',data:{labels:Array.from({length:datasets[0]?.data.length||0},function(_,i){return i}),datasets:datasets},
+      options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{usePointStyle:true,font:{size:11}}},tooltip:{backgroundColor:'#1e293b',borderColor:'#334155',borderWidth:1,callbacks:{label:function(tip){return ' '+tip.dataset.label+': '+(tip.parsed.y>=0?'+':'')+tip.parsed.y.toFixed(2)+'%'}}}},scales:{y:{grid:{color:'#1e293b'},ticks:{callback:function(v){return v+'%'}}},x:{display:false}}}
+    });
+  }
+}
+
+function initCorrelationChart(){/* Chart is created in calcCorrelation */}
+
+// ══════════════════════════════════════════
+// 📄 RELATÓRIO PDF
+// ══════════════════════════════════════════
+function generatePDFReport(){
+  if(typeof jspdf==='undefined'&&typeof window.jspdf==='undefined'){showToast('Biblioteca PDF a carregar, tenta novamente','error');return}
+  var jsPDF=window.jspdf.jsPDF;
+  var doc=new jsPDF();
+  var t=calcTotals();
+  var cal=calcDividendCalendar();
+  var totalDiv=cal.reduce(function(a,b){return a+b.total},0);
+  var pl=t.totalCur-t.totalInv;
+  var plPct=t.totalInv>0?(pl/t.totalInv*100):0;
+  var today=new Date().toLocaleDateString('pt-PT');
+  var y=20;
+
+  // Header
+  doc.setFontSize(20);doc.setTextColor(59,130,246);
+  doc.text('Portfolio de '+state.name,14,y);y+=10;
+  doc.setFontSize(10);doc.setTextColor(100);
+  doc.text('Relatório gerado em '+today,14,y);y+=12;
+
+  // Summary
+  doc.setFontSize(14);doc.setTextColor(0);
+  doc.text('Resumo',14,y);y+=8;
+  doc.setFontSize(10);doc.setTextColor(60);
+  doc.text('Valor Total: '+fmt(t.totalCur),14,y);y+=6;
+  doc.text('Total Investido: '+fmt(t.totalInv),14,y);y+=6;
+  doc.text('Lucro/Perda: '+fmt(pl)+' ('+(plPct>=0?'+':'')+plPct.toFixed(2)+'%)',14,y);y+=6;
+  doc.text('Dividendos Anuais Est.: '+fmt(totalDiv),14,y);y+=6;
+  doc.text('Capital Não Investido: '+fmt(state.unusedCapital||0),14,y);y+=12;
+
+  // Stocks table
+  doc.setFontSize(14);doc.setTextColor(0);
+  doc.text('Ações em Carteira',14,y);y+=8;
+  doc.setFontSize(8);doc.setTextColor(100);
+  doc.text('Ticker     Empresa              Volume    Compra    Atual     P&L       Yield',14,y);y+=5;
+  doc.setTextColor(60);
+  state.stocks.forEach(function(s){
+    var plV=s.volume*(s.currentPrice-s.buyPrice);
+    var line=s.ticker.padEnd(11)+s.name.substring(0,20).padEnd(21)+s.volume.toFixed(2).padEnd(10)+s.buyPrice.toFixed(2).padEnd(10)+s.currentPrice.toFixed(2).padEnd(10)+(plV>=0?'+':'')+plV.toFixed(2).padEnd(10)+s.divYield+'%';
+    doc.text(line,14,y);y+=4.5;
+    if(y>270){doc.addPage();y=20}
+  });
+  y+=8;
+
+  // ETFs
+  if(y>240){doc.addPage();y=20}
+  doc.setFontSize(14);doc.setTextColor(0);
+  doc.text('ETFs em Carteira',14,y);y+=8;
+  doc.setFontSize(8);doc.setTextColor(100);
+  doc.text('Plano          Nome                          Investido   Atual      P&L',14,y);y+=5;
+  doc.setTextColor(60);
+  state.etfs.forEach(function(e){
+    var plan=getPlan(e.planId);
+    var plV=e.current-e.invested;
+    var line=plan.name.substring(0,14).padEnd(15)+e.name.substring(0,30).padEnd(31)+e.invested.toFixed(2).padEnd(12)+e.current.toFixed(2).padEnd(11)+(plV>=0?'+':'')+plV.toFixed(2);
+    doc.text(line,14,y);y+=4.5;
+    if(y>270){doc.addPage();y=20}
+  });
+  y+=8;
+
+  // Dividends calendar
+  if(y>220){doc.addPage();y=20}
+  doc.setFontSize(14);doc.setTextColor(0);
+  doc.text('Calendário de Dividendos',14,y);y+=8;
+  doc.setFontSize(9);doc.setTextColor(60);
+  cal.forEach(function(m){
+    var stocks=m.details.map(function(d){return d.ticker}).join(', ');
+    doc.text(m.monthFull+': '+fmt(m.total)+' ('+m.count+' ações: '+stocks+')',14,y);y+=5;
+    if(y>270){doc.addPage();y=20}
+  });
+
+  // Footer
+  doc.setFontSize(8);doc.setTextColor(150);
+  doc.text('Este relatório é informativo. Não constitui aconselhamento financeiro.',14,285);
+
+  doc.save('portfolio_relatorio_'+today.replace(/\//g,'-')+'.pdf');
+  showToast('Relatório PDF gerado!');
 }
 
 
@@ -1389,7 +1725,8 @@ function renderHistory(){
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <div class="card-title" style="margin:0">📸 Snapshots do Portfolio</div>
-        <button class="btn btn-primary" onclick="takeSnapshot()">+ Snapshot Mensal</button>
+        <div style="display:flex;gap:8px"><button class="pdf-btn" onclick="generatePDFReport()">📄 Gerar Relatório PDF</button>
+        <button class="btn btn-primary" onclick="takeSnapshot()">+ Snapshot</button></div>
       </div>
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px">Tira um snapshot mensal para ver a evolução no gráfico do Resumo</div>
       <div style="overflow-x:auto"><table><thead><tr><th>Data</th><th class="text-right">Investido</th><th class="text-right">Valor</th><th class="text-right">P&L</th><th class="text-center">-</th></tr></thead>
@@ -1438,6 +1775,12 @@ function initCharts(){
   }
   if(activeTab==='analyzer'&&analyzerData){
     initAnalyzerChart();
+  }
+  if(activeTab==='etfanalyzer'&&window._etfAnalyzerData){
+    initETFAnalyzerChart();
+  }
+  if(activeTab==='correlation'){
+    initCorrelationChart();
   }
 }
 
