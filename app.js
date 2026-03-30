@@ -387,17 +387,32 @@ function sanitizeURL(url){
 
 async function robustYahooFetch(ticker,range,interval){
   var params='range='+range+'&interval='+(interval||'1d');
-  var urls=[
-    'https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?'+params),
-    'https://api.allorigins.win/raw?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?'+params)
-  ];
-  for(var url of urls){
+  var proxies=['https://corsproxy.io/?url=','https://api.allorigins.win/raw?url='];
+  // Try the ticker as-is first
+  for(var proxy of proxies){
     try{
-      var r=await fetch(url);
+      var r=await fetch(proxy+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?'+params));
       if(!r.ok)continue;
       var d=await r.json();
       if(d.chart?.result?.[0])return d;
     }catch(e){continue}
+  }
+  // If ticker has no dot (no exchange suffix), try common European suffixes
+  if(ticker.indexOf('.')===-1){
+    var suffixes=['.DE','.L','.AS','.MI','.PA','.MC','.SW','.CO'];
+    for(var suf of suffixes){
+      for(var proxy of proxies){
+        try{
+          var r=await fetch(proxy+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+suf+'?'+params));
+          if(!r.ok)continue;
+          var d=await r.json();
+          if(d.chart?.result?.[0]){
+            console.log('Found '+ticker+' as '+ticker+suf);
+            return d;
+          }
+        }catch(e){continue}
+      }
+    }
   }
   return null;
 }
@@ -648,10 +663,21 @@ function switchTab(id){activeTab=id;renderTabs();renderContent()}
 
 function destroyCharts(){
   Object.entries(charts).forEach(function(kv){
+    var v=kv[1];
     try{
-      if(kv[1]&&typeof kv[1].remove==='function')kv[1].remove();
-      else if(kv[1]&&typeof kv[1].destroy==='function')kv[1].destroy();
-      else if(kv[1]&&typeof kv[1].disconnect==='function')kv[1].disconnect();
+      if(!v)return;
+      // Lightweight Charts object with .remove()
+      if(typeof v.remove==='function')v.remove();
+      // Chart.js with .destroy()
+      else if(typeof v.destroy==='function')v.destroy();
+      // ResizeObserver with .disconnect()
+      else if(typeof v.disconnect==='function')v.disconnect();
+      // Nested {chart,resize} pattern
+      else if(typeof v==='object'){
+        if(v.chart&&typeof v.chart.remove==='function')v.chart.remove();
+        if(v.resize&&typeof v.resize.disconnect==='function')v.resize.disconnect();
+        if(v.chart&&typeof v.chart.destroy==='function')v.chart.destroy();
+      }
     }catch(e){}
   });
   charts={};
@@ -961,7 +987,7 @@ async function analyzeStock(){
     var lows=d.chart?.result?.[0]?.indicators?.quote?.[0]?.low||[];
     var volumes=d.chart?.result?.[0]?.indicators?.quote?.[0]?.volume||[];
 
-    if(!meta){container.innerHTML='<div style="text-align:center;padding:40px;color:var(--red)">Ticker "'+ticker+'" não encontrado</div>';return}
+    if(!meta){container.innerHTML='<div class="error-state"><div class="error-state-icon">🔍</div><div>Ticker <strong>'+ticker+'</strong> não encontrado.<br><br>Dicas:<br>• Ações US: usa ticker simples (AAPL, MO, O)<br>• Ações EU: adiciona sufixo (.MI para Milão, .DE para Frankfurt)<br>• ETFs: tenta com sufixo de bolsa</div></div>';return}
 
     var price=meta.regularMarketPrice;
     var prevClose=meta.chartPreviousClose||meta.previousClose||price;
@@ -1008,7 +1034,7 @@ function renderAnalyzerResult(){
     '<div class="analyzer-info-item"><div class="analyzer-info-label">Máx 52 sem</div><div class="analyzer-info-value">'+cur+d.high52w.toFixed(2)+' <span style="font-size:11px;color:var(--red)">'+fromHigh.toFixed(1)+'%</span></div></div>'+
     '<div class="analyzer-info-item"><div class="analyzer-info-label">Mín 52 sem</div><div class="analyzer-info-value">'+cur+d.low52w.toFixed(2)+' <span style="font-size:11px;color:var(--green)">+'+fromLow.toFixed(1)+'%</span></div></div>'+
     '<div class="analyzer-info-item"><div class="analyzer-info-label">Vol. Médio</div><div class="analyzer-info-value">'+(d.avgVolume>1000000?(d.avgVolume/1000000).toFixed(1)+'M':(d.avgVolume/1000).toFixed(0)+'K')+'</div></div>'+
-    '<div class="analyzer-info-item"><div class="analyzer-info-label">Abertura</div><div class="analyzer-info-value">'+cur+(d.prevClose||d.price).toFixed(2)+'</div></div>'+
+    '<div class="analyzer-info-item"><div class="analyzer-info-label">Fecho anterior</div><div class="analyzer-info-value">'+cur+(d.prevClose||d.price).toFixed(2)+'</div></div>'+
     '</div>'+
     '<div class="analyzer-links"><a href="https://seekingalpha.com/symbol/'+d.ticker+'" target="_blank" class="btn btn-sm">Seeking Alpha ↗</a><a href="https://finance.yahoo.com/quote/'+d.ticker+'" target="_blank" class="btn btn-sm">Yahoo Finance ↗</a><a href="https://www.google.com/finance/quote/'+d.ticker+'" target="_blank" class="btn btn-sm">Google Finance ↗</a></div></div>'+
     '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px"><div class="card-title" style="margin:0">Gráfico de Preços</div><div style="display:flex;gap:8px"><div class="chart-type-toggle"><button class="chart-type-btn '+(window._analyzerChartType!=='line'?'active':'')+'" onclick="setAnalyzerChartType(\'candle\')">🕯️ Candles</button><button class="chart-type-btn '+(window._analyzerChartType==='line'?'active':'')+'" onclick="setAnalyzerChartType(\'line\')">📈 Linha</button></div><div class="period-pills"><button class="period-pill '+(analyzerPeriod==='1mo'?'active':'')+'" onclick="changeAnalyzerPeriod(\'1mo\')">1M</button><button class="period-pill '+(analyzerPeriod==='3mo'?'active':'')+'" onclick="changeAnalyzerPeriod(\'3mo\')">3M</button><button class="period-pill '+(analyzerPeriod==='6mo'?'active':'')+'" onclick="changeAnalyzerPeriod(\'6mo\')">6M</button><button class="period-pill '+(analyzerPeriod==='1y'?'active':'')+'" onclick="changeAnalyzerPeriod(\'1y\')">1A</button><button class="period-pill '+(analyzerPeriod==='5y'?'active':'')+'" onclick="changeAnalyzerPeriod(\'5y\')">5A</button></div></div></div><div id="tvChartAnalyzer" class="tv-chart"></div></div>';
@@ -1151,7 +1177,7 @@ async function analyzeETF(){
     var timestamps=d.chart?.result?.[0]?.timestamp||[];
     var closes=d.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[];
 
-    if(!meta){container.innerHTML='<div style="text-align:center;padding:40px;color:var(--red)">ETF "'+ticker+'" não encontrado</div>';return}
+    if(!meta){container.innerHTML='<div class="error-state"><div class="error-state-icon">🔍</div><div>ETF <strong>'+ticker+'</strong> não encontrado.<br><br>Dicas: tenta com sufixo (.DE, .L, .AS)</div></div>';return}
 
     var price=meta.regularMarketPrice;
     var prevClose=meta.chartPreviousClose||price;
@@ -1534,8 +1560,16 @@ async function compareETFs(){
   var d1=await fetchETFData(t1);
   var d2=await fetchETFData(t2);
   
-  if(!d1||!d2){
-    container.innerHTML='<div style="text-align:center;padding:40px;color:var(--red)">Não foi possível obter dados de '+(d1?'':''+t1+' ')+(d2?'':''+t2)+'. Verifica os tickers.</div>';
+  if(!d1&&!d2){
+    container.innerHTML='<div class="error-state"><div class="error-state-icon">❌</div><div>Não foi possível obter dados de <strong>'+t1+'</strong> nem <strong>'+t2+'</strong>.<br>Verifica os tickers. Para ETFs europeus, tenta com sufixo: .DE, .L, .AS, .MI</div></div>';
+    return;
+  }
+  if(!d1){
+    container.innerHTML='<div class="error-state"><div class="error-state-icon">⚠️</div><div>Não encontrei <strong>'+t1+'</strong>. Tenta com sufixo de bolsa (.DE, .L, .AS, .MI).<br>Exemplos: SXRT.DE, CSPX.L, IWDA.AS</div></div>';
+    return;
+  }
+  if(!d2){
+    container.innerHTML='<div class="error-state"><div class="error-state-icon">⚠️</div><div>Não encontrei <strong>'+t2+'</strong>. Tenta com sufixo de bolsa (.DE, .L, .AS, .MI).<br>Exemplos: SXRT.DE, CSPX.L, IWDA.AS</div></div>';
     return;
   }
   
@@ -1570,21 +1604,24 @@ function renderCompResult(){
   // Insight cards - automatic analysis
   var insights=[];
   if(r1.y1!=null&&r2.y1!=null){
-    var better=r1.y1>r2.y1?e1.ticker:e2.ticker;
-    var diff=Math.abs(r1.y1-r2.y1).toFixed(1);
-    insights.push({icon:'📈',title:'Melhor retorno 1A',text:better+' ganhou +'+diff+'pp a mais',color:r1.y1>r2.y1?'var(--accent)':'var(--green)'});
+    var diff=Math.abs(r1.y1-r2.y1);
+    if(diff<1){insights.push({icon:'📈',title:'Retorno 1A',text:'Sem diferença relevante ('+diff.toFixed(1)+'pp)',color:'var(--text-muted)'})}
+    else{var better=r1.y1>r2.y1?e1.ticker:e2.ticker;insights.push({icon:'📈',title:'Melhor retorno 1A',text:better+' ganhou +'+diff.toFixed(1)+'pp a mais',color:r1.y1>r2.y1?'var(--accent)':'var(--green)'})}
   }
   if(r1.vol!=null&&r2.vol!=null){
-    var less=r1.vol<r2.vol?e1.ticker:e2.ticker;
-    insights.push({icon:'🛡️',title:'Menos volátil',text:less+' com '+(r1.vol<r2.vol?r1.vol:r2.vol).toFixed(1)+'% volatilidade',color:r1.vol<r2.vol?'var(--accent)':'var(--green)'});
+    var vdiff=Math.abs(r1.vol-r2.vol);
+    if(vdiff<2){insights.push({icon:'🛡️',title:'Volatilidade',text:'Similar (~'+((r1.vol+r2.vol)/2).toFixed(1)+'%)',color:'var(--text-muted)'})}
+    else{var less=r1.vol<r2.vol?e1.ticker:e2.ticker;insights.push({icon:'🛡️',title:'Menos volátil',text:less+' com '+(r1.vol<r2.vol?r1.vol:r2.vol).toFixed(1)+'% volatilidade',color:r1.vol<r2.vol?'var(--accent)':'var(--green)'})}
   }
   if(r1.sharpe!=null&&r2.sharpe!=null){
-    var best=r1.sharpe>r2.sharpe?e1.ticker:e2.ticker;
-    insights.push({icon:'⚖️',title:'Melhor risco/retorno',text:best+' com Sharpe '+(r1.sharpe>r2.sharpe?r1.sharpe:r2.sharpe).toFixed(2),color:r1.sharpe>r2.sharpe?'var(--accent)':'var(--green)'});
+    var sdiff=Math.abs(r1.sharpe-r2.sharpe);
+    if(sdiff<0.1){insights.push({icon:'⚖️',title:'Risco/Retorno',text:'Sharpe similar (~'+((r1.sharpe+r2.sharpe)/2).toFixed(2)+')',color:'var(--text-muted)'})}
+    else{var best=r1.sharpe>r2.sharpe?e1.ticker:e2.ticker;insights.push({icon:'⚖️',title:'Melhor risco/retorno',text:best+' com Sharpe '+(r1.sharpe>r2.sharpe?r1.sharpe:r2.sharpe).toFixed(2),color:r1.sharpe>r2.sharpe?'var(--accent)':'var(--green)'})}
   }
   if(r1.maxDD!=null&&r2.maxDD!=null){
-    var safer=r1.maxDD>r2.maxDD?e1.ticker:e2.ticker;
-    insights.push({icon:'📉',title:'Menor drawdown',text:safer+' caiu no máx. '+(r1.maxDD>r2.maxDD?r1.maxDD:r2.maxDD).toFixed(1)+'%',color:r1.maxDD>r2.maxDD?'var(--accent)':'var(--green)'});
+    var ddiff=Math.abs(r1.maxDD-r2.maxDD);
+    if(ddiff<2){insights.push({icon:'📉',title:'Drawdown',text:'Similar (~'+((r1.maxDD+r2.maxDD)/2).toFixed(1)+'%)',color:'var(--text-muted)'})}
+    else{var safer=r1.maxDD>r2.maxDD?e1.ticker:e2.ticker;insights.push({icon:'📉',title:'Menor drawdown',text:safer+' caiu no máx. '+(r1.maxDD>r2.maxDD?r1.maxDD:r2.maxDD).toFixed(1)+'%',color:r1.maxDD>r2.maxDD?'var(--accent)':'var(--green)'})}
   }
   var fromHigh1=e1.high52w>0?((e1.price-e1.high52w)/e1.high52w*100):0;
   var fromHigh2=e2.high52w>0?((e2.price-e2.high52w)/e2.high52w*100):0;
@@ -1687,7 +1724,7 @@ function initComparadorChart(){
 // ══════════════════════════════════════════
 function renderLinks(){
   var allLinks=state.usefulLinks||DEFAULT_USEFUL_LINKS;
-  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 style="font-size:18px;font-weight:800">🔗 Links Úteis</h2><button class="btn btn-sm btn-primary" onclick="addUsefulLink()">+ Adicionar Link</button></div>';
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 style="font-size:18px;font-weight:800">🔗 Links Úteis</h2><div style="display:flex;gap:8px"><button class="btn btn-sm" onclick="resetOnboarding()">🎓 Ver tutorial</button><button class="btn btn-sm btn-primary" onclick="addUsefulLink()">+ Adicionar Link</button></div></div>';
 
   allLinks.forEach(function(cat){
     html+='<div class="link-category"><div class="link-category-title">'+cat.category+'</div><div class="links-grid">';
