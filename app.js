@@ -265,22 +265,15 @@ async function fetchFxRate(){
 }
 
 async function fetchStockPrice(ticker){
-  // Try multiple CORS proxies
-  var proxies=[
-    'https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range=1d&interval=1d'),
-    'https://api.allorigins.win/raw?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range=1d&interval=1d')
-  ];
-  for(var purl of proxies){
-    try{
-      var r=await fetch(purl);
-      if(!r.ok)continue;
-      var d=await r.json();
+  try{
+    var d=await robustYahooFetch(ticker,'1d','1d');
+    if(d){
       var meta=d.chart?.result?.[0]?.meta;
       if(meta&&meta.regularMarketPrice){
         return{price:meta.regularMarketPrice,currency:meta.currency||'USD'};
       }
-    }catch(e){continue}
-  }
+    }
+  }catch(e){}
   // Fallback: try cached price
   try{var cached=JSON.parse(localStorage.getItem('cached_prices')||'{}');if(cached.prices&&cached.prices[ticker]){var cp=cached.prices[ticker];if(typeof cp==='object')return{price:cp.price,currency:cp.currency||'USD',cached:true};return{price:cp,currency:'USD',cached:true}}}catch(e){}
   return null;
@@ -807,7 +800,7 @@ async function loadNewsFeed(){
 
   container.innerHTML='<div class="feed-grid">'+allNews.map(function(n){
     return '<a href="'+sanitizeURL(n.link)+'" target="_blank" class="feed-item">'+
-      (n.thumb?'<div style="width:100%;height:140px;border-radius:8px;overflow:hidden;margin-bottom:10px;background:var(--bg)"><img src="'+n.thumb+'" style="width:100%;height:100%;object-fit:cover" loading="lazy" onerror="this.parentElement.style.display=\'none\'"></div>':'')+
+      (n.thumb?'<div style="width:100%;height:140px;border-radius:8px;overflow:hidden;margin-bottom:10px;background:var(--bg)"><img src="'+sanitizeURL(n.thumb)+'" style="width:100%;height:100%;object-fit:cover" loading="lazy" onerror="this.parentElement.style.display=\'none\'"></div>':'')+
       '<div class="feed-source" style="color:'+n.color+'">'+sanitizeHTML(n.source)+'</div>'+
       '<div class="feed-title">'+sanitizeHTML(n.title)+'</div>'+
       '<div class="feed-desc">'+sanitizeHTML(n.desc)+'</div>'+
@@ -822,6 +815,8 @@ function manageFeedSources(){
       '<input type="checkbox" id="fs_en_'+i+'" '+(s.enabled?'checked':'')+' style="width:18px;height:18px;cursor:pointer">'+
       '<input id="fs_name_'+i+'" value="'+s.name+'" style="width:100px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:11px">'+
       '<input id="fs_rss_'+i+'" value="'+(s.rss||'')+'" placeholder="RSS URL" style="flex:1;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:11px">'+
+      '<button class="feed-order-btn" onclick="moveFeedSource('+i+',-1)">↑</button>'+
+      '<button class="feed-order-btn" onclick="moveFeedSource('+i+',1)">↓</button>'+
       '<button class="btn btn-sm btn-danger" onclick="removeFeedSource('+i+')">🗑️</button></div>';
   }).join('');
   html+='<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Para encontrar RSS de um site, pesquisa "[nome do site] RSS feed" no Google</div><div class="form-grid"><div class="form-row"><label>Nome</label><input id="fs_new_name" placeholder="Nome"></div><div class="form-row"><label>RSS URL</label><input id="fs_new_rss" placeholder="https://.../feed.xml"></div></div></div>';
@@ -878,8 +873,40 @@ function moveYTChannel(i,dir){
   var channels=state.ytChannels||[];
   var newI=i+dir;
   if(newI<0||newI>=channels.length)return;
+  // Save current field values before swap
+  channels.forEach(function(ch,idx){
+    var nameEl=document.getElementById('yt_name_'+idx);
+    var cidEl=document.getElementById('yt_cid_'+idx);
+    var enEl=document.getElementById('yt_en_'+idx);
+    if(nameEl)ch.name=nameEl.value;
+    if(cidEl)ch.channelId=cidEl.value;
+    if(enEl)ch.enabled=enEl.checked;
+  });
   var tmp=channels[i];channels[i]=channels[newI];channels[newI]=tmp;
-  state.ytChannels=channels;saveData();render();
+  state.ytChannels=channels;saveData();
+  // Close modal and reopen with updated order
+  var overlay=document.querySelector('.modal-overlay');
+  if(overlay)overlay.remove();
+  manageYTChannels();
+}
+
+function moveFeedSource(i,dir){
+  var sources=state.feedSources||[];
+  var newI=i+dir;
+  if(newI<0||newI>=sources.length)return;
+  sources.forEach(function(s,idx){
+    var nameEl=document.getElementById('fs_name_'+idx);
+    var rssEl=document.getElementById('fs_rss_'+idx);
+    var enEl=document.getElementById('fs_en_'+idx);
+    if(nameEl)s.name=nameEl.value;
+    if(rssEl)s.rss=rssEl.value;
+    if(enEl)s.enabled=enEl.checked;
+  });
+  var tmp=sources[i];sources[i]=sources[newI];sources[newI]=tmp;
+  state.feedSources=sources;saveData();
+  var overlay=document.querySelector('.modal-overlay');
+  if(overlay)overlay.remove();
+  manageFeedSources();
 }
 
 function removeYTChannel(i){
