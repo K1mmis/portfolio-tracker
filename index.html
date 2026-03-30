@@ -209,8 +209,10 @@ tr:hover{background:rgba(255,255,255,.02)}
   </div>
   <div class="export-bar-right">
     <button class="btn btn-sm" onclick="exportData()">📥 Exportar JSON</button>
-    <button class="btn btn-sm" onclick="document.getElementById('importFile').click()">📤 Importar</button>
+    <button class="btn btn-sm" onclick="document.getElementById('importFile').click()">📤 Importar JSON</button>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+    <button class="btn btn-sm" onclick="document.getElementById('importCSV').click()">📊 Importar CSV</button>
+    <input type="file" id="importCSV" accept=".csv,.xlsx" style="display:none" onchange="importCSVData(event)">
     <button class="btn btn-sm" onclick="saveData();showToast('Dados guardados!')">💾 Guardar</button>
   </div>
 </div>
@@ -281,9 +283,8 @@ function loadAllAccounts(){
   }
   currentAccountId=allAccounts._current||Object.keys(allAccounts).filter(k=>k!=='_current')[0];
   state=allAccounts[currentAccountId];
-  if(!state.feedSources)state.feedSources=JSON.parse(JSON.stringify(DEFAULT_FEED_SOURCES));
-  if(!state.ytChannels)state.ytChannels=JSON.parse(JSON.stringify(DEFAULT_YT_CHANNELS));
-  if(!state.usefulLinks)state.usefulLinks=JSON.parse(JSON.stringify(DEFAULT_USEFUL_LINKS));
+  state=normalizeAccountState(state);
+  allAccounts[currentAccountId]=state;
   renderAccountSelector();
 }
 
@@ -472,29 +473,37 @@ async function fetchFxRate(){
     const r=await fetch('https://api.exchangerate-api.com/v4/latest/USD');
     const d=await r.json();
     fxRate=d.rates.EUR||0.92;
+    localStorage.setItem('cached_fx_rate',JSON.stringify({rate:fxRate,time:Date.now()}));
     document.getElementById('fxRate').textContent='1 USD = '+fxRate.toFixed(4)+' EUR';
     return fxRate;
   }catch(e){
-    console.warn('FX fetch failed, using default',e);
+    console.warn('FX fetch failed, trying cache',e);
+    var cached=localStorage.getItem('cached_fx_rate');
+    if(cached){try{var c=JSON.parse(cached);fxRate=c.rate||0.92}catch(x){}}
     document.getElementById('fxRate').textContent='1 USD = '+fxRate.toFixed(4)+' EUR (cache)';
     return fxRate;
   }
 }
 
 async function fetchStockPrice(ticker){
-  const url='https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range=1d&interval=1d');
-  const proxies=[url];
-  for(const purl of proxies){
+  // Try multiple CORS proxies
+  var proxies=[
+    'https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range=1d&interval=1d'),
+    'https://api.allorigins.win/raw?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range=1d&interval=1d')
+  ];
+  for(var purl of proxies){
     try{
-      const r=await fetch(purl);
+      var r=await fetch(purl);
       if(!r.ok)continue;
-      const d=await r.json();
-      const meta=d.chart?.result?.[0]?.meta;
+      var d=await r.json();
+      var meta=d.chart?.result?.[0]?.meta;
       if(meta&&meta.regularMarketPrice){
         return{price:meta.regularMarketPrice,currency:meta.currency||'USD'};
       }
     }catch(e){continue}
   }
+  // Fallback: try cached price
+  try{var cached=JSON.parse(localStorage.getItem('cached_prices')||'{}');if(cached.prices&&cached.prices[ticker])return{price:cached.prices[ticker],currency:'USD',cached:true}}catch(e){}
   return null;
 }
 
@@ -523,6 +532,10 @@ async function refreshPrices(){
     await new Promise(r=>setTimeout(r,300));
   }
 
+  // Cache last valid prices locally
+  var priceCache={};
+  state.stocks.forEach(function(s){priceCache[s.ticker]=s.currentPrice});
+  localStorage.setItem('cached_prices',JSON.stringify({prices:priceCache,time:Date.now()}));
   state.lastPriceUpdate=new Date().toISOString();
   saveData();
   render();
@@ -586,6 +599,19 @@ function calcTotals(){
 
 function getPlan(planId){return(state.plans||[]).find(p=>p.id===planId)||{name:planId,color:'#64748b'}}
 
+
+function sanitizeHTML(str){
+  if(!str)return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
+function sanitizeURL(url){
+  if(!url)return '#';
+  var s=String(url).trim();
+  if(s.startsWith('http://')||s.startsWith('https://'))return s;
+  return '#';
+}
+
 function showToast(msg,type='success'){
   const t=document.createElement('div');
   t.className='toast'+(type==='error'?' error':'');
@@ -595,6 +621,8 @@ function showToast(msg,type='success'){
 }
 
 function exportData(){
+  localStorage.setItem('last_backup_date',Date.now().toString());
+  var reminder=document.getElementById('backupReminder');if(reminder)reminder.remove();
   const blob=new Blob([JSON.stringify(allAccounts,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -609,12 +637,152 @@ function importData(e){
   reader.onload=function(ev){
     try{
       const imported=JSON.parse(ev.target.result);
-      // Check if it's multi-account or single
-      if(imported._current){allAccounts=imported}
-      else{allAccounts[currentAccountId]=imported;allAccounts[currentAccountId].lastUpdate=new Date().toISOString()}
+      // Validate structure
+      if(typeof imported!=='object'||imported===null){throw new Error('Formato inválido: não é um objeto JSON')}
+      if(imported._current){
+        // Multi-account format - validate each account
+        var validAccounts=0;
+        Object.keys(imported).forEach(function(k){
+          if(k==='_current')return;
+          if(typeof imported[k]==='object'&&imported[k].name){
+            imported[k]=normalizeAccountState(imported[k]);
+            validAccounts++;
+          }
+        });
+        if(validAccounts===0)throw new Error('Nenhuma conta válida encontrada no ficheiro');
+        allAccounts=imported;
+      }else if(imported.name||imported.stocks){
+        // Single account format
+        var normalized=normalizeAccountState(imported);
+        allAccounts[currentAccountId]=normalized;
+      }else{
+        throw new Error('Formato não reconhecido. Esperado: backup do Portfolio Tracker');
+      }
       localStorage.setItem('portfolio_accounts_v3',JSON.stringify(allAccounts));
-      location.reload();
-    }catch(err){alert('Erro: '+err.message)}
+      showToast('Dados importados com sucesso! A recarregar...');
+      setTimeout(function(){location.reload()},1000);
+    }catch(err){
+      alert('Erro ao importar: '+err.message+'\n\nVerifica se o ficheiro é um backup válido do Portfolio Tracker.');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value='';
+}
+
+function normalizeAccountState(acc){
+  // Ensure all required fields exist with correct types
+  if(!acc.name)acc.name='Conta Importada';
+  if(!Array.isArray(acc.stocks))acc.stocks=[];
+  if(!Array.isArray(acc.etfs))acc.etfs=[];
+  if(!Array.isArray(acc.plans))acc.plans=JSON.parse(JSON.stringify(DEFAULT_PLANS));
+  if(!Array.isArray(acc.watchlistStocks))acc.watchlistStocks=[];
+  if(!Array.isArray(acc.watchlistETFs))acc.watchlistETFs=[];
+  if(!Array.isArray(acc.dividendsReceived))acc.dividendsReceived=[];
+  if(!Array.isArray(acc.decisions))acc.decisions=[];
+  if(!Array.isArray(acc.portfolioHistory))acc.portfolioHistory=[];
+  if(!Array.isArray(acc.feedSources))acc.feedSources=JSON.parse(JSON.stringify(DEFAULT_FEED_SOURCES));
+  if(!Array.isArray(acc.ytChannels))acc.ytChannels=JSON.parse(JSON.stringify(DEFAULT_YT_CHANNELS));
+  if(!Array.isArray(acc.usefulLinks))acc.usefulLinks=JSON.parse(JSON.stringify(DEFAULT_USEFUL_LINKS));
+  if(!acc.lastUpdate)acc.lastUpdate=new Date().toISOString();
+  // Validate stocks have required fields
+  acc.stocks=acc.stocks.filter(function(s){return s&&s.ticker}).map(function(s){
+    return{ticker:String(s.ticker||''),name:String(s.name||s.ticker||''),sector:String(s.sector||'Other'),
+      volume:Number(s.volume)||0,buyPrice:Number(s.buyPrice)||0,currentPrice:Number(s.currentPrice)||0,
+      currency:String(s.currency||'USD'),divYield:Number(s.divYield)||0,divPerShare:Number(s.divPerShare)||0,
+      freq:String(s.freq||'Trimestral'),months:Array.isArray(s.months)?s.months.filter(function(m){return m>=1&&m<=12}):[]};
+  });
+  // Validate ETFs
+  acc.etfs=acc.etfs.filter(function(e){return e&&e.name}).map(function(e){
+    return{planId:String(e.planId||''),name:String(e.name||''),ticker:String(e.ticker||''),
+      isin:String(e.isin||''),type:String(e.type||'ACC'),invested:Number(e.invested)||0,current:Number(e.current)||0};
+  });
+  return acc;
+}
+
+
+function importCSVData(e){
+  var file=e.target.files[0];if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      var text=ev.target.result;
+      var lines=text.split('\n').filter(function(l){return l.trim()});
+      if(lines.length<2){showToast('Ficheiro CSV vazio ou inválido','error');return}
+      var headers=lines[0].split(/[,;\t]/).map(function(h){return h.trim().replace(/"/g,'').toLowerCase()});
+      
+      // Detect format (XTB vs Trading212 vs generic)
+      var format='generic';
+      var headerStr=headers.join(',');
+      if(headerStr.includes('symbol')&&headerStr.includes('open price'))format='xtb';
+      else if(headerStr.includes('ticker')&&headerStr.includes('average price'))format='trading212';
+      else if(headerStr.includes('instrument')&&headerStr.includes('quantity'))format='xtb_history';
+      
+      var imported=[];
+      var separator=lines[0].includes(';')?';':(lines[0].includes('\t')?'\t':',');
+      
+      for(var i=1;i<lines.length;i++){
+        var cols=lines[i].split(separator).map(function(c){return c.trim().replace(/"/g,'')});
+        if(cols.length<3)continue;
+        var row={};
+        headers.forEach(function(h,j){row[h]=cols[j]||''});
+        
+        var stock=null;
+        if(format==='xtb'){
+          stock={ticker:row['symbol']||row['instrument']||'',name:row['symbol']||'',
+            volume:parseFloat(row['volume']||row['quantity']||0),
+            buyPrice:parseFloat(row['open price']||row['opening price']||0),
+            currentPrice:parseFloat(row['close price']||row['current price']||row['open price']||0),
+            currency:'EUR',sector:'Other',divYield:0,divPerShare:0,freq:'Trimestral',months:[]};
+        }else if(format==='trading212'){
+          stock={ticker:row['ticker']||row['instrument']||'',name:row['name']||row['ticker']||'',
+            volume:parseFloat(row['shares']||row['quantity']||row['no. shares']||0),
+            buyPrice:parseFloat(row['average price']||row['price / share']||0),
+            currentPrice:parseFloat(row['current price']||row['average price']||0),
+            currency:row['currency']||'EUR',sector:'Other',divYield:0,divPerShare:0,freq:'Trimestral',months:[]};
+        }else{
+          // Generic: try common column names
+          var ticker=row['ticker']||row['symbol']||row['instrument']||row['ação']||cols[0]||'';
+          stock={ticker:ticker,name:row['name']||row['empresa']||row['nome']||ticker,
+            volume:parseFloat(row['volume']||row['quantity']||row['shares']||row['quantidade']||cols[1]||0),
+            buyPrice:parseFloat(row['buy price']||row['price']||row['preço']||row['open price']||cols[2]||0),
+            currentPrice:parseFloat(row['current price']||row['close price']||row['preço atual']||row['buy price']||cols[2]||0),
+            currency:row['currency']||row['moeda']||'EUR',sector:'Other',divYield:0,divPerShare:0,freq:'Trimestral',months:[]};
+        }
+        
+        if(stock&&stock.ticker&&stock.volume>0){
+          // Clean ticker (remove .US suffix common in XTB)
+          stock.ticker=stock.ticker.replace(/\.US$/i,'').replace(/\.UK$/i,'').toUpperCase();
+          imported.push(stock);
+        }
+      }
+      
+      if(imported.length===0){
+        showToast('Nenhuma posição válida encontrada no CSV. Verifica o formato.','error');
+        return;
+      }
+      
+      // Show confirmation modal
+      var preview=imported.slice(0,5).map(function(s){return s.ticker+' ('+s.volume.toFixed(2)+' @ '+s.buyPrice.toFixed(2)+')'}).join(', ');
+      if(imported.length>5)preview+=' e mais '+(imported.length-5)+'...';
+      
+      showModal('Importar '+imported.length+' posições ('+format+')',
+        '<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Formato detetado: <strong>'+format.toUpperCase()+'</strong></div>'+
+        '<div style="font-size:12px;margin-bottom:16px">Posições: '+sanitizeHTML(preview)+'</div>'+
+        '<div class="form-row"><label>O que fazer?</label><select id="f_csv_mode"><option value="add">Adicionar às ações existentes</option><option value="replace">Substituir todas as ações</option></select></div>',
+        function(){
+          var mode=document.getElementById('f_csv_mode').value;
+          if(mode==='replace')state.stocks=[];
+          imported.forEach(function(s){
+            var existing=state.stocks.find(function(ex){return ex.ticker===s.ticker});
+            if(existing){existing.volume=s.volume;existing.buyPrice=s.buyPrice;existing.currentPrice=s.currentPrice}
+            else{state.stocks.push(s)}
+          });
+          showToast(imported.length+' posições importadas!');
+        }
+      );
+    }catch(err){
+      showToast('Erro ao ler CSV: '+err.message,'error');
+    }
   };
   reader.readAsText(file);
   e.target.value='';
@@ -633,7 +801,25 @@ function showModal(title,fieldsHTML,onSave){
 // ══════════════════════════════════════════
 // RENDER ENGINE
 // ══════════════════════════════════════════
+
+function checkBackupReminder(){
+  var lastBackup=localStorage.getItem('last_backup_date');
+  if(!lastBackup){localStorage.setItem('last_backup_date',Date.now().toString());return}
+  var daysSince=(Date.now()-parseInt(lastBackup))/(1000*60*60*24);
+  if(daysSince>=7){
+    var bar=document.querySelector('.export-bar-right');
+    if(bar&&!document.getElementById('backupReminder')){
+      var reminder=document.createElement('span');
+      reminder.id='backupReminder';
+      reminder.style.cssText='font-size:11px;color:var(--yellow);padding:4px 10px;border-radius:6px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3)';
+      reminder.textContent='⚠️ Backup há '+Math.floor(daysSince)+' dias';
+      bar.prepend(reminder);
+    }
+  }
+}
+
 function render(){
+  checkBackupReminder();
   document.getElementById('headerTitle').textContent='Portfolio de '+state.name;
   document.title='Portfolio de '+state.name;
   const d=state.lastUpdate?new Date(state.lastUpdate):new Date();
@@ -776,7 +962,7 @@ async function loadYTFeed(){
   }
 
   container.innerHTML='<div class="yt-grid">'+allVideos.map(function(v){
-    return '<a href="'+v.link+'" target="_blank" class="yt-card">'+
+    return '<a href="'+sanitizeURL(v.link)+'" target="_blank" class="yt-card">'+
       '<div class="yt-thumb">'+(v.thumb?'<img src="'+v.thumb+'" alt="" loading="lazy">':'<div style="font-size:48px;opacity:.3">▶</div>')+'</div>'+
       '<div class="yt-info"><div class="yt-channel">'+v.channel+'</div><div class="yt-title">'+v.title+'</div><div style="font-size:10px;color:var(--text-dim);margin-top:4px">'+v.date+'</div></div></a>';
   }).join('')+'</div>';
@@ -822,11 +1008,11 @@ async function loadNewsFeed(){
   allNews.sort(function(a,b){return new Date(b.date)-new Date(a.date)});
 
   container.innerHTML='<div class="feed-grid">'+allNews.map(function(n){
-    return '<a href="'+n.link+'" target="_blank" class="feed-item">'+
+    return '<a href="'+sanitizeURL(n.link)+'" target="_blank" class="feed-item">'+
       (n.thumb?'<div style="width:100%;height:140px;border-radius:8px;overflow:hidden;margin-bottom:10px;background:var(--bg)"><img src="'+n.thumb+'" style="width:100%;height:100%;object-fit:cover" loading="lazy" onerror="this.parentElement.style.display=\'none\'"></div>':'')+
-      '<div class="feed-source" style="color:'+n.color+'">'+n.source+'</div>'+
-      '<div class="feed-title">'+n.title+'</div>'+
-      '<div class="feed-desc">'+n.desc+'</div>'+
+      '<div class="feed-source" style="color:'+n.color+'">'+sanitizeHTML(n.source)+'</div>'+
+      '<div class="feed-title">'+sanitizeHTML(n.title)+'</div>'+
+      '<div class="feed-desc">'+sanitizeHTML(n.desc)+'</div>'+
       '<div class="feed-date">'+n.date+'</div></a>';
   }).join('')+'</div>';
 }
