@@ -39,7 +39,7 @@
     <button class="btn btn-sm" onclick="document.getElementById('importFile').click()">📤 Importar JSON</button>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
     <button class="btn btn-sm" onclick="document.getElementById('importCSV').click()">📊 Importar CSV</button>
-    <input type="file" id="importCSV" accept=".csv,.xlsx" style="display:none" onchange="importCSVData(event)">
+    <input type="file" id="importCSV" accept=".csv" style="display:none" onchange="importCSVData(event)">
     <button class="btn btn-sm" onclick="saveData();showToast('Dados guardados!')">💾 Guardar</button>
   </div>
 </div>

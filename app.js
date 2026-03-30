@@ -227,10 +227,9 @@ const DEFAULT_WATCHLIST_STOCKS=[
 
 async function fetchTickerData(ticker){
   try{
-    const r=await fetch('https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range=5d&interval=1d'));
-    if(!r.ok)return null;
-    const d=await r.json();
-    const meta=d.chart?.result?.[0]?.meta;
+    var d=await robustYahooFetch(ticker,'5d','1d');
+    if(!d)return null;
+    var meta=d.chart?.result?.[0]?.meta;
     if(!meta)return null;
     return{price:meta.regularMarketPrice,currency:meta.currency||'USD',name:meta.shortName||meta.longName||'',exchange:meta.exchangeName||''};
   }catch(e){return null}
@@ -283,7 +282,7 @@ async function fetchStockPrice(ticker){
     }catch(e){continue}
   }
   // Fallback: try cached price
-  try{var cached=JSON.parse(localStorage.getItem('cached_prices')||'{}');if(cached.prices&&cached.prices[ticker])return{price:cached.prices[ticker],currency:'USD',cached:true}}catch(e){}
+  try{var cached=JSON.parse(localStorage.getItem('cached_prices')||'{}');if(cached.prices&&cached.prices[ticker]){var cp=cached.prices[ticker];if(typeof cp==='object')return{price:cp.price,currency:cp.currency||'USD',cached:true};return{price:cp,currency:'USD',cached:true}}}catch(e){}
   return null;
 }
 
@@ -312,9 +311,9 @@ async function refreshPrices(){
     await new Promise(r=>setTimeout(r,300));
   }
 
-  // Cache last valid prices locally
+  // Cache last valid prices with currency and timestamp
   var priceCache={};
-  state.stocks.forEach(function(s){priceCache[s.ticker]=s.currentPrice});
+  state.stocks.forEach(function(s){priceCache[s.ticker]={price:s.currentPrice,currency:s.currency,time:Date.now()}});
   localStorage.setItem('cached_prices',JSON.stringify({prices:priceCache,time:Date.now()}));
   state.lastPriceUpdate=new Date().toISOString();
   saveData();
@@ -390,6 +389,24 @@ function sanitizeURL(url){
   var s=String(url).trim();
   if(s.startsWith('http://')||s.startsWith('https://'))return s;
   return '#';
+}
+
+
+async function robustYahooFetch(ticker,range,interval){
+  var params='range='+range+'&interval='+(interval||'1d');
+  var urls=[
+    'https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?'+params),
+    'https://api.allorigins.win/raw?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?'+params)
+  ];
+  for(var url of urls){
+    try{
+      var r=await fetch(url);
+      if(!r.ok)continue;
+      var d=await r.json();
+      if(d.chart?.result?.[0])return d;
+    }catch(e){continue}
+  }
+  return null;
 }
 
 function showToast(msg,type='success'){
@@ -744,8 +761,8 @@ async function loadYTFeed(){
 
   container.innerHTML='<div class="yt-grid">'+allVideos.map(function(v){
     return '<a href="'+sanitizeURL(v.link)+'" target="_blank" class="yt-card">'+
-      '<div class="yt-thumb">'+(v.thumb?'<img src="'+v.thumb+'" alt="" loading="lazy">':'<div style="font-size:48px;opacity:.3">▶</div>')+'</div>'+
-      '<div class="yt-info"><div class="yt-channel">'+v.channel+'</div><div class="yt-title">'+v.title+'</div><div style="font-size:10px;color:var(--text-dim);margin-top:4px">'+v.date+'</div></div></a>';
+      '<div class="yt-thumb">'+(v.thumb?'<img src="'+sanitizeURL(v.thumb)+'" alt="" loading="lazy">':'<div style="font-size:48px;opacity:.3">▶</div>')+'</div>'+
+      '<div class="yt-info"><div class="yt-channel">'+sanitizeHTML(v.channel)+'</div><div class="yt-title">'+sanitizeHTML(v.title)+'</div><div style="font-size:10px;color:var(--text-dim);margin-top:4px">'+v.date+'</div></div></a>';
   }).join('')+'</div>';
 }
 
@@ -899,8 +916,8 @@ async function analyzeStock(){
 
   try{
     // Fetch chart data
-    var r=await fetch('https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range=1y&interval=1d'));
-    var d=await r.json();
+    var d=await robustYahooFetch(ticker,'1y','1d');
+    if(!d){container.innerHTML='<div style="text-align:center;padding:40px;color:var(--red)">Ticker "'+ticker+'" não encontrado (API indisponível)</div>';return}
     var meta=d.chart?.result?.[0]?.meta;
     var timestamps=d.chart?.result?.[0]?.timestamp||[];
     var closes=d.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[];
@@ -962,9 +979,8 @@ async function changeAnalyzerPeriod(period){
   if(!ticker)return;
   try{
     var interval=period==='5y'?'1wk':(period==='1y'?'1d':'1d');
-    var r=await fetch('https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range='+period+'&interval='+interval));
-    var d=await r.json();
-    var res=d.chart?.result?.[0];
+    var d=await robustYahooFetch(ticker,period,interval);
+    var res=d?d.chart?.result?.[0]:null;
     if(res){
       analyzerData.timestamps=res.timestamp||[];
       analyzerData.closes=res.indicators?.quote?.[0]?.close||[];
@@ -1024,13 +1040,13 @@ async function analyzeETF(){
   container.innerHTML='<div style="text-align:center;padding:40px"><span class="spinner"></span> A analisar '+ticker+'...</div>';
 
   try{
-    var r=await fetch('https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range=1y&interval=1d'));
-    var d=await r.json();
+    var d=await robustYahooFetch(ticker,'1y','1d');
+    if(!d){container.innerHTML='<div style="text-align:center;padding:40px;color:var(--red)">ETF "'+ticker+'" não encontrado (API indisponível). Tenta com sufixo de bolsa (ex: CSPX.L)</div>';return}
     var meta=d.chart?.result?.[0]?.meta;
     var timestamps=d.chart?.result?.[0]?.timestamp||[];
     var closes=d.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[];
 
-    if(!meta){container.innerHTML='<div style="text-align:center;padding:40px;color:var(--red)">ETF "'+ticker+'" não encontrado. Tenta com sufixo de bolsa (ex: CSPX.L)</div>';return}
+    if(!meta){container.innerHTML='<div style="text-align:center;padding:40px;color:var(--red)">ETF "'+ticker+'" não encontrado</div>';return}
 
     var price=meta.regularMarketPrice;
     var prevClose=meta.chartPreviousClose||price;
@@ -1151,9 +1167,8 @@ async function calcCorrelation(){
   var allData={};
   for(var s of stocks){
     try{
-      var r=await fetch('https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+s.ticker+'?range=1y&interval=1d'));
-      var d=await r.json();
-      var closes=d.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[];
+      var d=await robustYahooFetch(s.ticker,'1y','1d');
+      var closes=d?d.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[]:[];
       // Calculate daily returns
       var returns=[];
       for(var i=1;i<closes.length;i++){
@@ -1344,9 +1359,8 @@ function renderComparador(){
 
 async function fetchETFData(ticker){
   try{
-    var r=await fetch('https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range=1y&interval=1d'));
-    if(!r.ok)return null;
-    var d=await r.json();
+    var d=await robustYahooFetch(ticker,'1y','1d');
+    if(!d)return null;
     var meta=d.chart?.result?.[0]?.meta;
     var timestamps=d.chart?.result?.[0]?.timestamp||[];
     var closes=d.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[];
