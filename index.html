@@ -152,6 +152,24 @@ tr:hover{background:rgba(255,255,255,.02)}
 .link-desc{font-size:11px;color:var(--text-muted)}
 .link-category{margin-bottom:20px}
 .link-category-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.analyzer-search{display:flex;gap:10px;align-items:flex-end;margin-bottom:20px}
+.analyzer-search input{flex:1;padding:12px 16px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-weight:600}
+.analyzer-search input:focus{outline:none;border-color:var(--accent)}
+.analyzer-search button{padding:12px 24px;border-radius:10px}
+.analyzer-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.analyzer-metric{padding:14px 18px;background:var(--bg);border-radius:10px;border:1px solid var(--border)}
+.analyzer-metric-label{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.analyzer-metric-value{font-size:18px;font-weight:800}
+.period-pills{display:flex;gap:6px;margin-bottom:16px}
+.period-pill{padding:5px 14px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text-muted);transition:all .15s}
+.period-pill.active{background:rgba(59,130,246,.15);border-color:var(--accent);color:var(--accent-light)}
+.div-goal{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px}
+.div-goal-bar{height:24px;background:var(--bg);border-radius:12px;overflow:hidden;margin:10px 0}
+.div-goal-fill{height:100%;border-radius:12px;transition:width .5s ease}
+.div-goal-stats{display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted)}
+.feed-order-btn{padding:4px 8px;font-size:10px;cursor:pointer;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-muted)}
+.feed-order-btn:hover{border-color:var(--accent);color:var(--accent-light)}
+.feed-section-toggle{display:flex;gap:8px;margin-bottom:16px}
 </style>
 </head>
 <body>
@@ -207,6 +225,7 @@ const TABS=[
   {id:"watchlist",label:"👀 Watchlist"},
   {id:"history",label:"📋 Histórico"},
   {id:"fire",label:"🔥 FIRE"},
+  {id:"analyzer",label:"🔬 Analisador"},
   {id:"links",label:"🔗 Links Úteis"}
 ];
 
@@ -657,6 +676,7 @@ function renderContent(){
     case 'watchlist':el.innerHTML=renderWatchlist();break;
     case 'history':el.innerHTML=renderHistory();break;
     case 'fire':el.innerHTML=renderFIRE();break;
+    case 'analyzer':el.innerHTML=renderAnalyzer();break;
     case 'links':el.innerHTML=renderLinks();break;
   }
   setTimeout(initCharts,50);
@@ -667,9 +687,25 @@ function renderContent(){
 // 📰 FEED
 // ══════════════════════════════════════════
 function renderFeed(){
-  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:8px"><h2 style="font-size:18px;font-weight:800">📰 Feed de Notícias & Conteúdo</h2><div style="display:flex;gap:8px"><button class="btn btn-sm" onclick="loadFeedData()">🔄 Atualizar Feed</button><button class="btn btn-sm" onclick="manageFeedSources()">⚙️ Gerir Fontes</button><button class="btn btn-sm" onclick="manageYTChannels()">📺 Gerir Canais</button></div></div>'+
-    '<div class="card"><div class="card-title">📺 Últimos Vídeos</div><div id="ytFeedContainer"><div style="text-align:center;padding:30px;color:var(--text-dim)"><span class="spinner"></span> A carregar vídeos...</div></div></div>'+
-    '<div class="card"><div class="card-title">Notícias Financeiras</div><div id="newsFeedContainer"><div style="text-align:center;padding:30px;color:var(--text-dim)"><span class="spinner"></span> A carregar notícias...</div></div></div>';
+  var vidFirst=state.feedVideoFirst!==false;
+  var toggleBtn1=vidFirst?'active':'';
+  var toggleBtn2=vidFirst?'':'active';
+  
+  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:8px"><h2 style="font-size:18px;font-weight:800">📰 Feed de Notícias & Conteúdo</h2><div style="display:flex;gap:8px"><button class="btn btn-sm" onclick="loadFeedData()">🔄 Atualizar</button><button class="btn btn-sm" onclick="manageFeedSources()">⚙️ Fontes</button><button class="btn btn-sm" onclick="manageYTChannels()">📺 Canais</button></div></div>'+
+    '<div class="feed-section-toggle"><button class="period-pill '+toggleBtn1+'" onclick="toggleFeedOrder(true)">📺 Vídeos primeiro</button><button class="period-pill '+toggleBtn2+'" onclick="toggleFeedOrder(false)">📰 Notícias primeiro</button></div>'+
+    (vidFirst?
+      '<div class="card"><div class="card-title">📺 Últimos Vídeos</div><div id="ytFeedContainer"><div style="text-align:center;padding:30px;color:var(--text-dim)"><span class="spinner"></span> A carregar vídeos...</div></div></div>'+
+      '<div class="card"><div class="card-title">📰 Notícias Financeiras</div><div id="newsFeedContainer"><div style="text-align:center;padding:30px;color:var(--text-dim)"><span class="spinner"></span> A carregar notícias...</div></div></div>'
+    :
+      '<div class="card"><div class="card-title">📰 Notícias Financeiras</div><div id="newsFeedContainer"><div style="text-align:center;padding:30px;color:var(--text-dim)"><span class="spinner"></span> A carregar notícias...</div></div></div>'+
+      '<div class="card"><div class="card-title">📺 Últimos Vídeos</div><div id="ytFeedContainer"><div style="text-align:center;padding:30px;color:var(--text-dim)"><span class="spinner"></span> A carregar vídeos...</div></div></div>'
+    );
+}
+
+function toggleFeedOrder(vidFirst){
+  state.feedVideoFirst=vidFirst;
+  saveData();
+  renderContent();
 }
 
 async function loadFeedData(){
@@ -682,33 +718,49 @@ async function loadYTFeed(){
   if(!container)return;
   var channels=state.ytChannels||DEFAULT_YT_CHANNELS;
   var activeChannels=channels.filter(function(ch){return ch.enabled});
+  // Sort by priority (index = priority, lower = higher priority)
   var allVideos=[];
+  var sevenDaysAgo=new Date();sevenDaysAgo.setDate(sevenDaysAgo.getDate()-7);
 
-  for(var ch of activeChannels){
+  for(var ci=0;ci<activeChannels.length;ci++){
+    var ch=activeChannels[ci];
+    var maxVids=(ci<2)?3:(ci<4)?2:1; // Top 2 channels get 3 vids, next 2 get 2, rest get 1
     try{
       var rssUrl='https://api.rss2json.com/v1/api.json?rss_url=https://www.youtube.com/feeds/videos.xml?channel_id='+ch.channelId;
       var r=await fetch(rssUrl);
       if(!r.ok)continue;
       var d=await r.json();
       if(d.items){
-        d.items.slice(0,3).forEach(function(item){
+        var count=0;
+        for(var item of d.items){
+          if(count>=maxVids)break;
+          var pubDate=item.pubDate?new Date(item.pubDate):null;
+          if(pubDate&&pubDate<sevenDaysAgo)continue; // Skip videos older than 7 days
           var vidId='';
           if(item.link){var m=item.link.match(/v=([^&]+)/);if(m)vidId=m[1]}
           allVideos.push({
-            channel:ch.name,
+            channel:ch.name,priority:ci,
             title:item.title||'',
             link:item.link||ch.channelUrl,
             thumb:vidId?'https://img.youtube.com/vi/'+vidId+'/mqdefault.jpg':'',
-            date:item.pubDate?new Date(item.pubDate).toLocaleDateString('pt-PT'):'',
+            date:pubDate?pubDate.toLocaleDateString('pt-PT'):'',
+            dateObj:pubDate,
             vidId:vidId
           });
-        });
+          count++;
+        }
       }
     }catch(e){console.warn('YT feed error for '+ch.name,e)}
   }
 
+  // Sort: by priority first, then by date within same priority
+  allVideos.sort(function(a,b){
+    if(a.priority!==b.priority)return a.priority-b.priority;
+    return (b.dateObj||0)-(a.dateObj||0);
+  });
+
   if(allVideos.length===0){
-    container.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-dim)">Não foi possível carregar vídeos. Tenta atualizar.</div>';
+    container.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-dim)">Nenhum vídeo nos últimos 7 dias. Tenta atualizar.</div>';
     return;
   }
 
@@ -801,16 +853,20 @@ function removeFeedSource(i){
 
 function manageYTChannels(){
   var channels=state.ytChannels||DEFAULT_YT_CHANNELS;
-  var html=channels.map(function(ch,i){
-    return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:8px;flex-wrap:wrap">'+
-      '<input type="checkbox" id="yt_en_'+i+'" '+(ch.enabled?'checked':'')+' style="width:18px;height:18px;cursor:pointer">'+
-      '<input id="yt_name_'+i+'" value="'+ch.name+'" style="width:100px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:11px">'+
-      '<input id="yt_cid_'+i+'" value="'+(ch.channelId||'')+'" placeholder="Channel ID" style="flex:1;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:11px">'+
+  var html='<div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Ordem = prioridade. Os primeiros canais mostram mais vídeos. Usa ↑↓ para reordenar.</div>';
+  html+=channels.map(function(ch,i){
+    return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;padding:6px 8px;background:var(--bg);border-radius:8px">'+
+      '<span style="font-size:10px;color:var(--accent);font-weight:800;width:20px">#'+(i+1)+'</span>'+
+      '<input type="checkbox" id="yt_en_'+i+'" '+(ch.enabled?'checked':'')+' style="width:16px;height:16px;cursor:pointer">'+
+      '<input id="yt_name_'+i+'" value="'+ch.name+'" style="width:90px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:11px">'+
+      '<input id="yt_cid_'+i+'" value="'+(ch.channelId||'')+'" placeholder="Channel ID" style="flex:1;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:11px">'+
+      '<button class="feed-order-btn" onclick="moveYTChannel('+i+',-1)">↑</button>'+
+      '<button class="feed-order-btn" onclick="moveYTChannel('+i+',1)">↓</button>'+
       '<button class="btn btn-sm btn-danger" onclick="removeYTChannel('+i+')">🗑️</button></div>';
   }).join('');
-  html+='<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Para encontrar o Channel ID: abre o canal no YouTube, clica em "Acerca" e copia o ID do canal. Ou usa <a href="https://commentpicker.com/youtube-channel-id.php" target="_blank" style="color:var(--accent-light)">este site</a></div><div class="form-grid"><div class="form-row"><label>Nome</label><input id="yt_new_name" placeholder="Nome"></div><div class="form-row"><label>Channel ID</label><input id="yt_new_cid" placeholder="UCxxxxxxx"></div></div><div class="form-row"><label>Descrição</label><input id="yt_new_desc" placeholder="Investimentos..."></div></div>';
+  html+='<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Channel ID: usa <a href="https://commentpicker.com/youtube-channel-id.php" target="_blank" style="color:var(--accent-light)">este site</a> para encontrar</div><div class="form-grid"><div class="form-row"><label>Nome</label><input id="yt_new_name" placeholder="Nome"></div><div class="form-row"><label>Channel ID</label><input id="yt_new_cid" placeholder="UCxxxxxxx"></div></div><div class="form-row"><label>Descrição</label><input id="yt_new_desc" placeholder="Investimentos..."></div></div>';
 
-  showModal('Gerir Canais YouTube',html,function(){
+  showModal('Gerir Canais YouTube (ordem = prioridade)',html,function(){
     channels.forEach(function(ch,i){
       ch.name=document.getElementById('yt_name_'+i).value;
       ch.channelId=document.getElementById('yt_cid_'+i).value;
@@ -823,12 +879,148 @@ function manageYTChannels(){
   });
 }
 
+function moveYTChannel(i,dir){
+  var channels=state.ytChannels||[];
+  var newI=i+dir;
+  if(newI<0||newI>=channels.length)return;
+  var tmp=channels[i];channels[i]=channels[newI];channels[newI]=tmp;
+  state.ytChannels=channels;saveData();render();
+}
+
 function removeYTChannel(i){
   var channels=state.ytChannels||[];
   channels.splice(i,1);
   state.ytChannels=channels;
   saveData();render();
 }
+
+
+// ══════════════════════════════════════════
+// 🔬 ANALISADOR DE AÇÕES
+// ══════════════════════════════════════════
+var analyzerData=null;
+var analyzerPeriod='6mo';
+
+function renderAnalyzer(){
+  var savedTicker=window._analyzerTicker||'';
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 style="font-size:18px;font-weight:800">🔬 Analisador de Ações</h2></div>';
+  html+='<div class="analyzer-search"><input id="analyzer_ticker" placeholder="Escreve um ticker (ex: AAPL, MO, O, VICI...)" value="'+savedTicker+'" onkeydown="if(event.key===\'Enter\')analyzeStock()"><button class="btn btn-primary" onclick="analyzeStock()">🔍 Analisar</button></div>';
+  html+='<div id="analyzerResult">';
+  if(analyzerData){html+=renderAnalyzerResult()}
+  else{html+='<div style="text-align:center;padding:60px;color:var(--text-dim)">Introduz um ticker e clica Analisar para ver dados detalhados</div>'}
+  html+='</div>';
+  return html;
+}
+
+async function analyzeStock(){
+  var ticker=document.getElementById('analyzer_ticker').value.trim().toUpperCase();
+  if(!ticker)return;
+  window._analyzerTicker=ticker;
+  var container=document.getElementById('analyzerResult');
+  container.innerHTML='<div style="text-align:center;padding:40px"><span class="spinner"></span> A analisar '+ticker+'...</div>';
+
+  try{
+    // Fetch chart data
+    var r=await fetch('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range=1y&interval=1d');
+    var d=await r.json();
+    var meta=d.chart?.result?.[0]?.meta;
+    var timestamps=d.chart?.result?.[0]?.timestamp||[];
+    var closes=d.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[];
+    var highs=d.chart?.result?.[0]?.indicators?.quote?.[0]?.high||[];
+    var lows=d.chart?.result?.[0]?.indicators?.quote?.[0]?.low||[];
+    var volumes=d.chart?.result?.[0]?.indicators?.quote?.[0]?.volume||[];
+
+    if(!meta){container.innerHTML='<div style="text-align:center;padding:40px;color:var(--red)">Ticker "'+ticker+'" não encontrado</div>';return}
+
+    var price=meta.regularMarketPrice;
+    var prevClose=meta.chartPreviousClose||meta.previousClose||price;
+    var dayChange=price-prevClose;
+    var dayChangePct=(dayChange/prevClose)*100;
+    var high52w=Math.max(...closes.filter(function(v){return v}));
+    var low52w=Math.min(...closes.filter(function(v){return v}));
+    var avgVol=volumes.length>0?volumes.reduce(function(a,b){return a+(b||0)},0)/volumes.length:0;
+
+    analyzerData={
+      ticker:ticker,name:meta.shortName||meta.longName||ticker,
+      currency:meta.currency||'USD',exchange:meta.exchangeName||'',
+      price:price,prevClose:prevClose,dayChange:dayChange,dayChangePct:dayChangePct,
+      high52w:high52w,low52w:low52w,avgVolume:avgVol,
+      timestamps:timestamps,closes:closes,highs:highs,lows:lows,volumes:volumes
+    };
+
+    container.innerHTML=renderAnalyzerResult();
+    setTimeout(function(){initAnalyzerChart()},100);
+
+  }catch(e){
+    container.innerHTML='<div style="text-align:center;padding:40px;color:var(--red)">Erro ao analisar: '+e.message+'</div>';
+  }
+}
+
+function renderAnalyzerResult(){
+  var d=analyzerData;if(!d)return '';
+  var cur=d.currency==='EUR'?'\u20ac':'$';
+  var isPos=d.dayChange>=0;
+  var fromHigh=((d.price-d.high52w)/d.high52w*100);
+  var fromLow=((d.price-d.low52w)/d.low52w*100);
+  // Check if in portfolio
+  var inPortfolio=state.stocks.find(function(s){return s.ticker===d.ticker});
+  var portfolioInfo='';
+  if(inPortfolio){
+    var pl=inPortfolio.volume*(d.price-inPortfolio.buyPrice);
+    var plPct=((d.price-inPortfolio.buyPrice)/inPortfolio.buyPrice*100);
+    portfolioInfo='<div class="card" style="border-color:var(--accent)"><div class="card-title">📦 Na tua carteira</div><div class="analyzer-grid"><div class="analyzer-metric"><div class="analyzer-metric-label">Volume</div><div class="analyzer-metric-value">'+inPortfolio.volume.toFixed(4)+'</div></div><div class="analyzer-metric"><div class="analyzer-metric-label">Preço Compra</div><div class="analyzer-metric-value">'+cur+inPortfolio.buyPrice.toFixed(2)+'</div></div><div class="analyzer-metric"><div class="analyzer-metric-label">P&L</div><div class="analyzer-metric-value" style="color:'+(pl>=0?'var(--green)':'var(--red)')+'">'+cur+pl.toFixed(2)+' ('+plPct.toFixed(2)+'%)</div></div><div class="analyzer-metric"><div class="analyzer-metric-label">Div Yield</div><div class="analyzer-metric-value" style="color:var(--yellow)">'+inPortfolio.divYield+'%</div></div></div></div>';
+  }
+
+  return '<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px"><div><div style="font-size:12px;color:var(--text-muted)">'+d.exchange+'</div><div style="font-size:22px;font-weight:800">'+d.name+' <span style="color:var(--accent)">('+d.ticker+')</span></div></div><div style="text-align:right"><div style="font-size:28px;font-weight:800">'+cur+d.price.toFixed(2)+'</div><div style="font-size:14px;font-weight:700;color:'+(isPos?'var(--green)':'var(--red)')+'">'+(isPos?'+':'')+d.dayChange.toFixed(2)+' ('+(isPos?'+':'')+d.dayChangePct.toFixed(2)+'%)</div></div></div>'+
+    '<div class="analyzer-grid"><div class="analyzer-metric"><div class="analyzer-metric-label">Máximo 52 semanas</div><div class="analyzer-metric-value">'+cur+d.high52w.toFixed(2)+'<span style="font-size:11px;color:var(--red);margin-left:6px">'+fromHigh.toFixed(1)+'%</span></div></div><div class="analyzer-metric"><div class="analyzer-metric-label">Mínimo 52 semanas</div><div class="analyzer-metric-value">'+cur+d.low52w.toFixed(2)+'<span style="font-size:11px;color:var(--green);margin-left:6px">+'+fromLow.toFixed(1)+'%</span></div></div><div class="analyzer-metric"><div class="analyzer-metric-label">Volume Médio</div><div class="analyzer-metric-value">'+(d.avgVolume>1000000?(d.avgVolume/1000000).toFixed(1)+'M':(d.avgVolume/1000).toFixed(0)+'K')+'</div></div><div class="analyzer-metric"><div class="analyzer-metric-label">Moeda</div><div class="analyzer-metric-value">'+d.currency+'</div></div></div>'+
+    '<div style="display:flex;gap:8px;margin:16px 0"><a href="https://seekingalpha.com/symbol/'+d.ticker+'" target="_blank" class="btn btn-sm" style="text-decoration:none">Seeking Alpha ↗</a><a href="https://finance.yahoo.com/quote/'+d.ticker+'" target="_blank" class="btn btn-sm" style="text-decoration:none">Yahoo Finance ↗</a><a href="https://www.google.com/finance/quote/'+d.ticker+'" target="_blank" class="btn btn-sm" style="text-decoration:none">Google Finance ↗</a></div></div>'+
+    portfolioInfo+
+    '<div class="card"><div class="card-title">Gráfico de Preços</div><div class="period-pills"><button class="period-pill '+(analyzerPeriod==='1mo'?'active':'')+'" onclick="changeAnalyzerPeriod(\'1mo\')">1M</button><button class="period-pill '+(analyzerPeriod==='3mo'?'active':'')+'" onclick="changeAnalyzerPeriod(\'3mo\')">3M</button><button class="period-pill '+(analyzerPeriod==='6mo'?'active':'')+'" onclick="changeAnalyzerPeriod(\'6mo\')">6M</button><button class="period-pill '+(analyzerPeriod==='1y'?'active':'')+'" onclick="changeAnalyzerPeriod(\'1y\')">1A</button><button class="period-pill '+(analyzerPeriod==='5y'?'active':'')+'" onclick="changeAnalyzerPeriod(\'5y\')">5A</button></div><div class="chart-wrap"><canvas id="chartAnalyzer" height="300"></canvas></div></div>';
+}
+
+async function changeAnalyzerPeriod(period){
+  analyzerPeriod=period;
+  var ticker=analyzerData?.ticker;
+  if(!ticker)return;
+  try{
+    var interval=period==='5y'?'1wk':(period==='1y'?'1d':'1d');
+    var r=await fetch('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range='+period+'&interval='+interval);
+    var d=await r.json();
+    var res=d.chart?.result?.[0];
+    if(res){
+      analyzerData.timestamps=res.timestamp||[];
+      analyzerData.closes=res.indicators?.quote?.[0]?.close||[];
+    }
+    // Re-render period pills and chart
+    destroyCharts();
+    var container=document.getElementById('analyzerResult');
+    if(container){container.innerHTML=renderAnalyzerResult();setTimeout(function(){initAnalyzerChart()},100)}
+  }catch(e){console.warn('Period change error',e)}
+}
+
+function initAnalyzerChart(){
+  if(!analyzerData)return;
+  var ctx=document.getElementById('chartAnalyzer');if(!ctx)return;
+  var dates=analyzerData.timestamps.map(function(t){return new Date(t*1000).toLocaleDateString('pt-PT')});
+  var prices=analyzerData.closes;
+  var firstPrice=prices.find(function(p){return p!=null})||0;
+  
+  charts.analyzer=new Chart(ctx,{
+    type:'line',
+    data:{labels:dates,datasets:[{
+      label:analyzerData.ticker,
+      data:prices,
+      borderColor:prices[prices.length-1]>=firstPrice?'rgba(16,185,129,.9)':'rgba(239,68,68,.9)',
+      backgroundColor:prices[prices.length-1]>=firstPrice?'rgba(16,185,129,.08)':'rgba(239,68,68,.08)',
+      fill:true,tension:.2,borderWidth:2,pointRadius:0,pointHitRadius:10
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false},tooltip:{backgroundColor:'#1e293b',borderColor:'#334155',borderWidth:1,callbacks:{label:function(tip){return ' '+analyzerData.currency+' '+tip.parsed.y.toFixed(2)}}}},
+      scales:{y:{grid:{color:'#1e293b'},ticks:{callback:function(v){return analyzerData.currency==='EUR'?'\u20ac'+v:'$'+v}}},x:{grid:{display:false},ticks:{maxTicksLimit:8}}}
+    }
+  });
+}
+
 
 // ══════════════════════════════════════════
 // 🔗 LINKS ÚTEIS
@@ -862,6 +1054,31 @@ function addUsefulLink(){
   });
 }
 
+
+function renderDivGoal(){
+  var goal=state.divGoal||{monthly:50,annual:600};
+  var cal=calcDividendCalendar();
+  var totalEst=cal.reduce(function(a,b){return a+b.total},0);
+  var totalReceived=(state.dividendsReceived||[]).reduce(function(a,d){return a+(d.netEUR||0)},0);
+  var monthlyEst=totalEst/12;
+  var pctAnnual=goal.annual>0?Math.min(100,(totalEst/goal.annual)*100):0;
+  var pctMonthly=goal.monthly>0?Math.min(100,(monthlyEst/goal.monthly)*100):0;
+  var barColorA=pctAnnual>=100?'var(--green)':pctAnnual>=50?'var(--yellow)':'var(--red)';
+  var barColorM=pctMonthly>=100?'var(--green)':pctMonthly>=50?'var(--yellow)':'var(--red)';
+
+  return '<div class="div-goal"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:13px;font-weight:700">🎯 Meta de Dividendos</div><button class="btn btn-sm" onclick="editDivGoal()">✏️</button></div>'+
+    '<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Meta anual: '+fmt(goal.annual)+' — Estimado: '+fmt(totalEst)+' — Recebido: '+fmt(totalReceived)+'</div>'+
+    '<div class="div-goal-bar"><div class="div-goal-fill" style="width:'+pctAnnual+'%;background:'+barColorA+'"></div></div>'+
+    '<div class="div-goal-stats"><span>'+pctAnnual.toFixed(0)+'% da meta anual</span><span>Meta mensal: '+fmt(goal.monthly)+' | Est.: '+fmt(monthlyEst)+'</span></div></div>';
+}
+
+function editDivGoal(){
+  var goal=state.divGoal||{monthly:50,annual:600};
+  showModal('Meta de Dividendos','<div class="form-grid"><div class="form-row"><label>Meta mensal (\u20ac)</label><input id="f_goal_m" type="number" step="1" value="'+goal.monthly+'"></div><div class="form-row"><label>Meta anual (\u20ac)</label><input id="f_goal_a" type="number" step="1" value="'+goal.annual+'"></div></div>',function(){
+    state.divGoal={monthly:parseFloat(document.getElementById('f_goal_m').value)||50,annual:parseFloat(document.getElementById('f_goal_a').value)||600};
+  });
+}
+
 // ══════════════════════════════════════════
 // OVERVIEW
 // ══════════════════════════════════════════
@@ -883,6 +1100,7 @@ function renderOverview(){
       <div class="stat-card"><div class="glow" style="background:var(--yellow)"></div><div class="stat-label">Dividendos/Ano (est.)</div><div class="stat-value">${fmt(totalDiv)}</div><div class="stat-sub" style="color:var(--yellow)">Média: ${fmt(avgDiv)}/mês</div></div>
       <div class="stat-card"><div class="glow" style="background:var(--purple)"></div><div class="stat-label">Variância Mensal</div><div class="stat-value">${variance.toFixed(1)}%</div><div class="stat-sub" style="color:var(--purple)">Min: ${fmt(minDiv)} | Max: ${fmt(maxDiv)}</div></div>
     </div>
+    ${renderDivGoal()}
     <div class="capital-bar">
       <div class="capital-item">💰 Capital não investido: <strong>${fmt(state.unusedCapital||0)}</strong></div>
       <div class="capital-item">📈 Taxa juro: <strong>${state.interestRate||3.8}%</strong></div>
@@ -1219,6 +1437,9 @@ function initCharts(){
   }
   if(activeTab==='fire'){
     initFIRECharts();
+  }
+  if(activeTab==='analyzer'&&analyzerData){
+    initAnalyzerChart();
   }
 }
 
