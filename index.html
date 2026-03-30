@@ -435,7 +435,7 @@ const DEFAULT_WATCHLIST_STOCKS=[
 
 async function fetchTickerData(ticker){
   try{
-    const r=await fetch('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range=5d&interval=1d');
+    const r=await fetch('https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range=5d&interval=1d'));
     if(!r.ok)return null;
     const d=await r.json();
     const meta=d.chart?.result?.[0]?.meta;
@@ -471,13 +471,11 @@ async function fetchFxRate(){
 }
 
 async function fetchStockPrice(ticker){
-  // Try Yahoo Finance via CORS proxy
-  const proxies=[
-    `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=1d&interval=1d`,
-  ];
-  for(const url of proxies){
+  const url='https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range=1d&interval=1d');
+  const proxies=[url];
+  for(const purl of proxies){
     try{
-      const r=await fetch(url);
+      const r=await fetch(purl);
       if(!r.ok)continue;
       const d=await r.json();
       const meta=d.chart?.result?.[0]?.meta;
@@ -904,7 +902,7 @@ var analyzerPeriod='6mo';
 function renderAnalyzer(){
   var savedTicker=window._analyzerTicker||'';
   var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 style="font-size:18px;font-weight:800">🔬 Analisador de Ações</h2></div>';
-  html+='<div class="analyzer-search"><input id="analyzer_ticker" placeholder="Escreve um ticker (ex: AAPL, MO, O, VICI...)" value="'+savedTicker+'" onkeydown="if(event.key===\'Enter\')analyzeStock()"><button class="btn btn-primary" onclick="analyzeStock()">🔍 Analisar</button></div>';
+  html+='<div class="analyzer-search"><input id="analyzer_ticker" placeholder="Ticker sem sufixo (ex: AAPL, MO, O, UVV, ENEL.MI...)" value="'+savedTicker+'" onkeydown="if(event.key===\'Enter\')analyzeStock()"><button class="btn btn-primary" onclick="analyzeStock()">🔍 Analisar</button></div>';
   html+='<div id="analyzerResult">';
   if(analyzerData){html+=renderAnalyzerResult()}
   else{html+='<div style="text-align:center;padding:60px;color:var(--text-dim)">Introduz um ticker e clica Analisar para ver dados detalhados</div>'}
@@ -921,7 +919,7 @@ async function analyzeStock(){
 
   try{
     // Fetch chart data
-    var r=await fetch('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range=1y&interval=1d');
+    var r=await fetch('https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range=1y&interval=1d'));
     var d=await r.json();
     var meta=d.chart?.result?.[0]?.meta;
     var timestamps=d.chart?.result?.[0]?.timestamp||[];
@@ -984,7 +982,7 @@ async function changeAnalyzerPeriod(period){
   if(!ticker)return;
   try{
     var interval=period==='5y'?'1wk':(period==='1y'?'1d':'1d');
-    var r=await fetch('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range='+period+'&interval='+interval);
+    var r=await fetch('https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+ticker+'?range='+period+'&interval='+interval));
     var d=await r.json();
     var res=d.chart?.result?.[0];
     if(res){
