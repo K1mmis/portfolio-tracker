@@ -1548,8 +1548,8 @@ function renderCompResult(){
   var d=window._compData;if(!d)return '';
   var e1=d.etf1,e2=d.etf2;
   var r1=e1.returns||{},r2=e2.returns||{};
-  var cur1=e1.currency==='EUR'?'€':'$';
-  var cur2=e2.currency==='EUR'?'€':'$';
+  var cur1=e1.currency==='EUR'?'\u20ac':'$';
+  var cur2=e2.currency==='EUR'?'\u20ac':'$';
   
   function winner(v1,v2,higherBetter){
     if(v1==null||v2==null)return['',''];
@@ -1566,9 +1566,58 @@ function renderCompResult(){
   }
   
   var is1Pos=e1.dayChange>=0,is2Pos=e2.dayChange>=0;
-  
-  return '<div class="grid2"><div class="card" style="text-align:center"><div style="font-size:12px;color:var(--text-muted)">'+e1.exchange+'</div><div style="font-size:18px;font-weight:800">'+sanitizeHTML(e1.name)+'</div><div style="font-size:13px;color:var(--accent)">'+e1.ticker+'</div><div style="font-size:24px;font-weight:800;margin-top:8px">'+cur1+e1.price.toFixed(2)+'</div><div style="font-size:12px;color:'+(is1Pos?'var(--green)':'var(--red)')+'">'+(is1Pos?'+':'')+e1.dayChangePct.toFixed(2)+'%</div></div>'+
-    '<div class="card" style="text-align:center"><div style="font-size:12px;color:var(--text-muted)">'+e2.exchange+'</div><div style="font-size:18px;font-weight:800">'+sanitizeHTML(e2.name)+'</div><div style="font-size:13px;color:var(--accent)">'+e2.ticker+'</div><div style="font-size:24px;font-weight:800;margin-top:8px">'+cur2+e2.price.toFixed(2)+'</div><div style="font-size:12px;color:'+(is2Pos?'var(--green)':'var(--red)')+'">'+(is2Pos?'+':'')+e2.dayChangePct.toFixed(2)+'%</div></div></div>'+
+
+  // Insight cards - automatic analysis
+  var insights=[];
+  if(r1.y1!=null&&r2.y1!=null){
+    var better=r1.y1>r2.y1?e1.ticker:e2.ticker;
+    var diff=Math.abs(r1.y1-r2.y1).toFixed(1);
+    insights.push({icon:'📈',title:'Melhor retorno 1A',text:better+' ganhou +'+diff+'pp a mais',color:r1.y1>r2.y1?'var(--accent)':'var(--green)'});
+  }
+  if(r1.vol!=null&&r2.vol!=null){
+    var less=r1.vol<r2.vol?e1.ticker:e2.ticker;
+    insights.push({icon:'🛡️',title:'Menos volátil',text:less+' com '+(r1.vol<r2.vol?r1.vol:r2.vol).toFixed(1)+'% volatilidade',color:r1.vol<r2.vol?'var(--accent)':'var(--green)'});
+  }
+  if(r1.sharpe!=null&&r2.sharpe!=null){
+    var best=r1.sharpe>r2.sharpe?e1.ticker:e2.ticker;
+    insights.push({icon:'⚖️',title:'Melhor risco/retorno',text:best+' com Sharpe '+(r1.sharpe>r2.sharpe?r1.sharpe:r2.sharpe).toFixed(2),color:r1.sharpe>r2.sharpe?'var(--accent)':'var(--green)'});
+  }
+  if(r1.maxDD!=null&&r2.maxDD!=null){
+    var safer=r1.maxDD>r2.maxDD?e1.ticker:e2.ticker;
+    insights.push({icon:'📉',title:'Menor drawdown',text:safer+' caiu no máx. '+(r1.maxDD>r2.maxDD?r1.maxDD:r2.maxDD).toFixed(1)+'%',color:r1.maxDD>r2.maxDD?'var(--accent)':'var(--green)'});
+  }
+  var fromHigh1=e1.high52w>0?((e1.price-e1.high52w)/e1.high52w*100):0;
+  var fromHigh2=e2.high52w>0?((e2.price-e2.high52w)/e2.high52w*100):0;
+  var closer=Math.abs(fromHigh1)<Math.abs(fromHigh2)?e1.ticker:e2.ticker;
+  insights.push({icon:'🎯',title:'Mais perto do máximo',text:closer+' está a '+(Math.abs(fromHigh1)<Math.abs(fromHigh2)?fromHigh1:fromHigh2).toFixed(1)+'% do high',color:'var(--yellow)'});
+
+  var insightHTML=insights.map(function(ins){
+    return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center"><div style="font-size:24px;margin-bottom:6px">'+ins.icon+'</div><div style="font-size:11px;font-weight:700;color:'+ins.color+';text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">'+ins.title+'</div><div style="font-size:12px;color:var(--text-muted)">'+ins.text+'</div></div>';
+  }).join('');
+
+  // Portfolio integration
+  var portHTML='';
+  var inPort1=state.stocks.find(function(s){return s.ticker===e1.ticker})||state.etfs.find(function(e){return e.ticker===e1.ticker});
+  var inPort2=state.stocks.find(function(s){return s.ticker===e2.ticker})||state.etfs.find(function(e){return e.ticker===e2.ticker});
+  if(inPort1||inPort2){
+    portHTML='<div class="card"><div class="card-title">📦 No teu Portfolio</div><div class="grid2">';
+    if(inPort1){
+      var isStock=!!inPort1.volume;
+      var pl=isStock?(inPort1.volume*(e1.price-inPort1.buyPrice)):(inPort1.current-inPort1.invested);
+      portHTML+='<div class="analyzer-info-item"><div class="analyzer-info-label">'+e1.ticker+'</div><div class="analyzer-info-value" style="color:'+(pl>=0?'var(--green)':'var(--red)')+'">P&L: '+(pl>=0?'+':'')+fmt(pl)+'</div></div>';
+    }else{portHTML+='<div class="analyzer-info-item"><div class="analyzer-info-label">'+e1.ticker+'</div><div class="analyzer-info-value" style="color:var(--text-dim)">Não tens</div></div>'}
+    if(inPort2){
+      var isStock=!!inPort2.volume;
+      var pl=isStock?(inPort2.volume*(e2.price-inPort2.buyPrice)):(inPort2.current-inPort2.invested);
+      portHTML+='<div class="analyzer-info-item"><div class="analyzer-info-label">'+e2.ticker+'</div><div class="analyzer-info-value" style="color:'+(pl>=0?'var(--green)':'var(--red)')+'">P&L: '+(pl>=0?'+':'')+fmt(pl)+'</div></div>';
+    }else{portHTML+='<div class="analyzer-info-item"><div class="analyzer-info-label">'+e2.ticker+'</div><div class="analyzer-info-value" style="color:var(--text-dim)">Não tens</div></div>'}
+    portHTML+='</div></div>';
+  }
+
+  return '<div class="grid2"><div class="card" style="text-align:center"><div style="font-size:12px;color:var(--text-muted)">'+sanitizeHTML(e1.exchange)+'</div><div style="font-size:18px;font-weight:800">'+sanitizeHTML(e1.name)+'</div><div style="font-size:13px;color:var(--accent)">'+e1.ticker+'</div><div style="font-size:28px;font-weight:800;margin-top:8px">'+cur1+e1.price.toFixed(2)+'</div><div style="font-size:13px;color:'+(is1Pos?'var(--green)':'var(--red)')+'">'+(is1Pos?'▲ +':'▼ ')+Math.abs(e1.dayChangePct).toFixed(2)+'%</div></div>'+
+    '<div class="card" style="text-align:center"><div style="font-size:12px;color:var(--text-muted)">'+sanitizeHTML(e2.exchange)+'</div><div style="font-size:18px;font-weight:800">'+sanitizeHTML(e2.name)+'</div><div style="font-size:13px;color:var(--accent)">'+e2.ticker+'</div><div style="font-size:28px;font-weight:800;margin-top:8px">'+cur2+e2.price.toFixed(2)+'</div><div style="font-size:13px;color:'+(is2Pos?'var(--green)':'var(--red)')+'">'+(is2Pos?'▲ +':'▼ ')+Math.abs(e2.dayChangePct).toFixed(2)+'%</div></div></div>'+
+    '<div class="card"><div class="card-title">💡 Análise Rápida</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">'+insightHTML+'</div></div>'+
+    portHTML+
     '<div class="card"><div class="card-title">Comparação Detalhada</div><table class="comp-table"><thead><tr><th></th><th>'+e1.ticker+'</th><th>'+e2.ticker+'</th></tr></thead><tbody>'+
     row('Retorno 1 Mês',r1.m1,r2.m1,'%',true)+
     row('Retorno 3 Meses',r1.m3,r2.m3,'%',true)+
@@ -1786,6 +1835,7 @@ function renderStocks(){
     <div class="toolbar">
       <button class="btn btn-primary" onclick="addStock()">+ Adicionar Ação</button>
       <button class="btn" onclick="updateAllPrices()">🔄 Atualizar Preços Manual</button>
+      <button class="btn btn-sm" onclick="document.getElementById('importCSV').click()">📊 Importar CSV</button>
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <div style="overflow-x:auto"><table>
@@ -2706,8 +2756,43 @@ function takeSnapshot(){
 
 function deleteSnapshot(i){if(confirm('Remover?')){state.portfolioHistory.splice(i,1);saveData();render()}}
 
+
+// ══════════════════════════════════════════
+// 🎓 ONBOARDING
+// ══════════════════════════════════════════
+function checkOnboarding(){
+  if(localStorage.getItem('onboarding_done'))return;
+  showOnboarding();
+}
+
+function showOnboarding(){
+  var overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.innerHTML='<div class="modal" style="max-width:560px"><div style="text-align:center;margin-bottom:20px"><div style="font-size:48px;margin-bottom:8px">📊</div><h2 style="font-size:22px;font-weight:800;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Bem-vindo ao Portfolio Tracker!</h2><p style="color:var(--text-muted);font-size:13px;margin-top:8px">A tua ferramenta gratuita de gestão de investimentos e dividendos</p></div>'+
+    '<div style="margin-bottom:20px">'+
+    '<div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:16px;padding:14px;background:var(--bg);border-radius:10px;border:1px solid var(--border)"><div style="font-size:24px;flex-shrink:0">1️⃣</div><div><div style="font-size:13px;font-weight:700;margin-bottom:2px">Importa o teu portfolio</div><div style="font-size:12px;color:var(--text-muted)">Usa <strong>📊 Importar CSV</strong> para carregar posições da XTB ou Trading 212. Ou adiciona ações manualmente no separador Ações.</div></div></div>'+
+    '<div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:16px;padding:14px;background:var(--bg);border-radius:10px;border:1px solid var(--border)"><div style="font-size:24px;flex-shrink:0">2️⃣</div><div><div style="font-size:13px;font-weight:700;margin-bottom:2px">Analisa e compara</div><div style="font-size:12px;color:var(--text-muted)">Usa o <strong>🔬 Analisador</strong> para ver gráficos de candlestick e o <strong>⚖️ Comparador</strong> para decidir entre ETFs.</div></div></div>'+
+    '<div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:16px;padding:14px;background:var(--bg);border-radius:10px;border:1px solid var(--border)"><div style="font-size:24px;flex-shrink:0">3️⃣</div><div><div style="font-size:13px;font-weight:700;margin-bottom:2px">Planeia os teus dividendos</div><div style="font-size:12px;color:var(--text-muted)">O <strong>📅 Calendário</strong> mostra meses fortes e fracos. O <strong>🔥 FIRE</strong> calcula quanto precisas para a reforma.</div></div></div>'+
+    '</div>'+
+    '<div style="padding:12px 16px;background:rgba(16,185,129,.08);border-radius:10px;border:1px solid rgba(16,185,129,.2);margin-bottom:20px"><div style="font-size:12px;color:var(--green)"><strong>🔒 100% privado</strong> — Os teus dados ficam no browser. Sem login, sem servidor, sem tracking. Ninguém vê os teus dados.</div></div>'+
+    '<div style="padding:12px 16px;background:rgba(59,130,246,.08);border-radius:10px;border:1px solid rgba(59,130,246,.2);margin-bottom:20px"><div style="font-size:12px;color:var(--accent-light)"><strong>💾 Faz backup!</strong> — Clica em <strong>📥 Exportar JSON</strong> regularmente para não perder dados se limpares o browser.</div></div>'+
+    '<div style="text-align:center"><button class="btn btn-primary" style="padding:12px 40px;font-size:14px" onclick="closeOnboarding(this)">🚀 Começar a usar</button></div>'+
+    '</div>';
+  document.body.appendChild(overlay);
+}
+
+function closeOnboarding(btn){
+  localStorage.setItem('onboarding_done','1');
+  btn.closest('.modal-overlay').remove();
+}
+
+function resetOnboarding(){
+  localStorage.removeItem('onboarding_done');
+  showOnboarding();
+}
+
 // ══════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════
 loadAllAccounts();
-fetchFxRate().then(()=>{render();checkAutoRefresh()});
+fetchFxRate().then(()=>{render();checkAutoRefresh();checkOnboarding()});

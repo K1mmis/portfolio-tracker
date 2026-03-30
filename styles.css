@@ -206,3 +206,8 @@ tr:hover{background:rgba(255,255,255,.02)}
 .loading-text{font-size:13px;color:var(--text-muted);margin-top:8px}
 .error-state{text-align:center;padding:60px 20px;color:var(--red)}
 .error-state-icon{font-size:32px;margin-bottom:12px}
+
+.insight-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.insight-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;transition:all .15s}
+.insight-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.onboarding-step{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px;padding:14px;background:var(--bg);border-radius:10px;border:1px solid var(--border)}
